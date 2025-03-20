@@ -68,7 +68,7 @@ const Sidebar = () => {
   
   return (
     <SidebarContainer>
-      <Logo>מטבח דארמה</Logo>
+      <Logo>מטבח</Logo>
       <Menu>
         <MenuItem>
           <StyledNavLink to="/opening">
