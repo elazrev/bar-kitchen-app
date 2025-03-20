@@ -13,6 +13,7 @@ import {
     Timestamp
   } from 'firebase/firestore';
   import { db } from './firebase';
+  import { uploadImage } from './cloudinary';
   
   // נהלי פתיחה
   export const getOpeningTasks = async () => {
@@ -82,7 +83,7 @@ import {
     await deleteDoc(taskRef);
   };
   
-  // מתכונים
+  // מתכונים עם תמיכה בתמונות מ-Cloudinary
   export const getRecipes = async () => {
     const recipesRef = collection(db, 'recipes');
     const q = query(recipesRef, orderBy('name', 'asc'));
@@ -109,23 +110,43 @@ import {
   };
   
   export const addRecipe = async (recipeData, imageFile) => {
-    // הגדרת תמונת ברירת מחדל קבועה במקום להעלות תמונה
-    const defaultImageUrl = '/images/default-recipe.jpg';
+    let imageUrl = '/images/default-recipe.jpg';
+    
+    // אם יש תמונה, העלה אותה ל-Cloudinary
+    if (imageFile) {
+      try {
+        imageUrl = await uploadImage(imageFile);
+      } catch (error) {
+        console.error('שגיאה בהעלאת תמונה:', error);
+        // אם ההעלאה נכשלה, נשתמש בתמונת ברירת מחדל
+      }
+    }
     
     const recipesRef = collection(db, 'recipes');
     return await addDoc(recipesRef, {
       ...recipeData,
-      imageUrl: defaultImageUrl,  // שימוש בקישור קבוע
+      imageUrl,  // כתובת ה-URL של התמונה מ-Cloudinary או תמונת ברירת המחדל
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
   };
   
   export const updateRecipe = async (recipeId, recipeData, imageFile) => {
-    // אין צורך לטפל בתמונות בגרסה זו
+    let updateData = { ...recipeData };
+    
+    // אם יש תמונה חדשה, העלה אותה ל-Cloudinary
+    if (imageFile) {
+      try {
+        updateData.imageUrl = await uploadImage(imageFile);
+      } catch (error) {
+        console.error('שגיאה בהעלאת תמונה:', error);
+        // אם ההעלאה נכשלה, נשאיר את התמונה הקיימת
+      }
+    }
+    
     const recipeRef = doc(db, 'recipes', recipeId);
     await updateDoc(recipeRef, {
-      ...recipeData,
+      ...updateData,
       updatedAt: serverTimestamp()
     });
   };
@@ -188,41 +209,6 @@ import {
   };
   
   // דוחות
-  export const getTaskCompletionReports = async (startDate, endDate) => {
-    // יצירת דוחות לפי טווח תאריכים
-    const reportsRef = collection(db, 'taskReports');
-    
-    // המרה לתאריכי firebase
-    const startTimestamp = Timestamp.fromDate(new Date(startDate));
-    const endTimestamp = Timestamp.fromDate(new Date(endDate));
-    
-    const q = query(
-      reportsRef, 
-      where('date', '>=', startTimestamp),
-      where('date', '<=', endTimestamp),
-      orderBy('date', 'desc')
-    );
-    
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      date: doc.data().date.toDate()
-    }));
-  };
-  
-  // שמירת דיווח השלמת משימות
-export const saveTaskReport = async (reportData) => {
-    const reportsRef = collection(db, 'taskReports');
-    return await addDoc(reportsRef, {
-      ...reportData,
-      date: serverTimestamp(),
-      createdAt: serverTimestamp()
-    });
-  };
-  
-  // קבלת דוחות משימות
   export const getTaskReports = async (startDate, endDate) => {
     // המרה לתאריכי firebase
     const startTimestamp = Timestamp.fromDate(new Date(startDate));
@@ -244,4 +230,13 @@ export const saveTaskReport = async (reportData) => {
       date: doc.data().date.toDate()
     }));
   };
-
+  
+  // שמירת דיווח השלמת משימות
+  export const saveTaskReport = async (reportData) => {
+    const reportsRef = collection(db, 'taskReports');
+    return await addDoc(reportsRef, {
+      ...reportData,
+      date: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
+  };

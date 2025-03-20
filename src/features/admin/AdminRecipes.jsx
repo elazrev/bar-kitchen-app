@@ -15,6 +15,7 @@ import {
   updateRecipe, 
   deleteRecipe 
 } from '../../services/api';
+import { getResizedImageUrl } from '../../services/cloudinary';
 import { toast } from 'react-toastify';
 
 const RecipesContainer = styled.div`
@@ -72,7 +73,6 @@ const RecipeCard = styled.div`
   margin-bottom: 1rem;
   background-color: ${props => props.editing ? '#f9f9f9' : 'white'};
 `;
-
 const RecipeContent = styled.div`
   display: flex;
   justify-content: space-between;
@@ -136,7 +136,6 @@ const FormGrid = styled.div`
 const FormGroup = styled.div`
   margin-bottom: 1rem;
 `;
-
 const Label = styled.label`
   display: block;
   font-weight: 500;
@@ -343,43 +342,11 @@ const LoadingState = styled.div`
   padding: 2rem;
   color: #666;
 `;
-
 const AdminRecipes = () => {
-  const [recipes, setRecipes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [editingRecipe, setEditingRecipe] = useState(null);
-  const [newRecipe, setNewRecipe] = useState({
-    name: '',
-    description: '',
-    prepTime: '',
-    servings: '',
-    ingredients: [{ amount: '', name: '' }],
-    instructions: [''],
-    notes: '',
-    imageFile: null,
-    imageUrl: ''
-  });
-  const [isAddingNew, setIsAddingNew] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState('');
-
-  useEffect(() => {
-    const fetchRecipes = async () => {
-      try {
-        const recipesData = await getRecipes();
-        setRecipes(recipesData);
-        setLoading(false);
-      } catch (err) {
-        console.error('שגיאה בטעינת מתכונים:', err);
-        setLoading(false);
-      }
-    };
-    
-    fetchRecipes();
-  }, []);
-
-  const handleAddRecipe = () => {
-    setIsAddingNew(true);
-    setNewRecipe({
+    const [recipes, setRecipes] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [editingRecipe, setEditingRecipe] = useState(null);
+    const [newRecipe, setNewRecipe] = useState({
       name: '',
       description: '',
       prepTime: '',
@@ -390,307 +357,348 @@ const AdminRecipes = () => {
       imageFile: null,
       imageUrl: ''
     });
-    setPreviewUrl('');
-  };
+    const [isAddingNew, setIsAddingNew] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState('');
   
-  const handleEditRecipe = (recipe) => {
-    setEditingRecipe({ 
-      ...recipe,
-      ingredients: recipe.ingredients || [{ amount: '', name: '' }],
-      instructions: recipe.instructions || [''],
-      imageFile: null
-    });
-    setPreviewUrl(recipe.imageUrl || '');
-  };
-  
-  const handleDeleteRecipe = async (recipeId) => {
-    if (!window.confirm('האם אתה בטוח שברצונך למחוק מתכון זה?')) {
-      return;
-    }
-    
-    try {
-      await deleteRecipe(recipeId);
-      setRecipes(recipes.filter(recipe => recipe.id !== recipeId));
-      toast.success('המתכון נמחק בהצלחה');
-    } catch (err) {
-      console.error('שגיאה במחיקת מתכון:', err);
-      toast.error('אירעה שגיאה במחיקת המתכון');
-    }
-  };
-  
-  const handleImageChange = (e, isEditing) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    
-    // יצירת URL מקומי לתצוגה מקדימה
-    const url = URL.createObjectURL(file);
-    setPreviewUrl(url);
-    
-    if (isEditing) {
-      setEditingRecipe({
-        ...editingRecipe,
-        imageFile: file
-      });
-    } else {
-      setNewRecipe({
-        ...newRecipe,
-        imageFile: file
-      });
-    }
-  };
-  
-  const handleAddIngredient = (isEditing) => {
-    if (isEditing) {
-      setEditingRecipe({
-        ...editingRecipe,
-        ingredients: [...editingRecipe.ingredients, { amount: '', name: '' }]
-      });
-    } else {
-      setNewRecipe({
-        ...newRecipe,
-        ingredients: [...newRecipe.ingredients, { amount: '', name: '' }]
-      });
-    }
-  };
-  
-  const handleRemoveIngredient = (index, isEditing) => {
-    if (isEditing) {
-      const ingredients = [...editingRecipe.ingredients];
-      ingredients.splice(index, 1);
-      setEditingRecipe({
-        ...editingRecipe,
-        ingredients
-      });
-    } else {
-      const ingredients = [...newRecipe.ingredients];
-      ingredients.splice(index, 1);
-      setNewRecipe({
-        ...newRecipe,
-        ingredients
-      });
-    }
-  };
-  
-  const handleIngredientChange = (index, field, value, isEditing) => {
-    if (isEditing) {
-      const ingredients = [...editingRecipe.ingredients];
-      ingredients[index][field] = value;
-      setEditingRecipe({
-        ...editingRecipe,
-        ingredients
-      });
-    } else {
-      const ingredients = [...newRecipe.ingredients];
-      ingredients[index][field] = value;
-      setNewRecipe({
-        ...newRecipe,
-        ingredients
-      });
-    }
-  };
-  
-  const handleAddInstruction = (isEditing) => {
-    if (isEditing) {
-      setEditingRecipe({
-        ...editingRecipe,
-        instructions: [...editingRecipe.instructions, '']
-      });
-    } else {
-      setNewRecipe({
-        ...newRecipe,
-        instructions: [...newRecipe.instructions, '']
-      });
-    }
-  };
-  
-  const handleRemoveInstruction = (index, isEditing) => {
-    if (isEditing) {
-      const instructions = [...editingRecipe.instructions];
-      instructions.splice(index, 1);
-      setEditingRecipe({
-        ...editingRecipe,
-        instructions
-      });
-    } else {
-      const instructions = [...newRecipe.instructions];
-      instructions.splice(index, 1);
-      setNewRecipe({
-        ...newRecipe,
-        instructions
-      });
-    }
-  };
-  
-  const handleInstructionChange = (index, value, isEditing) => {
-    if (isEditing) {
-      const instructions = [...editingRecipe.instructions];
-      instructions[index] = value;
-      setEditingRecipe({
-        ...editingRecipe,
-        instructions
-      });
-    } else {
-      const instructions = [...newRecipe.instructions];
-      instructions[index] = value;
-      setNewRecipe({
-        ...newRecipe,
-        instructions
-      });
-    }
-  };
-  
-  const handleSaveRecipe = async () => {
-    if (!editingRecipe.name.trim()) {
-      toast.error('שם המתכון הוא שדה חובה');
-      return;
-    }
-    
-    // וידוא שיש לפחות מרכיב אחד עם שם
-    if (!editingRecipe.ingredients.some(i => i.name.trim())) {
-      toast.error('יש להוסיף לפחות מרכיב אחד');
-      return;
-    }
-    
-    // וידוא שיש לפחות הוראה אחת
-    if (!editingRecipe.instructions.some(i => i.trim())) {
-      toast.error('יש להוסיף לפחות הוראת הכנה אחת');
-      return;
-    }
-    
-    try {
-      // בגרסה זו אנחנו מתעלמים מהתמונה
-      await updateRecipe(
-        editingRecipe.id, 
-        {
-          name: editingRecipe.name,
-          description: editingRecipe.description,
-          prepTime: editingRecipe.prepTime,
-          servings: editingRecipe.servings,
-          ingredients: editingRecipe.ingredients.filter(i => i.name.trim()),
-          instructions: editingRecipe.instructions.filter(i => i.trim()),
-          notes: editingRecipe.notes
+    useEffect(() => {
+      const fetchRecipes = async () => {
+        try {
+          const recipesData = await getRecipes();
+          setRecipes(recipesData);
+          setLoading(false);
+        } catch (err) {
+          console.error('שגיאה בטעינת מתכונים:', err);
+          toast.error('אירעה שגיאה בטעינת המתכונים');
+          setLoading(false);
         }
-        // הסרנו את הפרמטר של התמונה
-      );
+      };
       
-      // עדכון הרשימה המקומית
-      setRecipes(recipes.map(recipe => 
-        recipe.id === editingRecipe.id 
-          ? { 
-              ...editingRecipe, 
-              imageUrl: editingRecipe.imageUrl || '/images/default-recipe.jpg'
-            } 
-          : recipe
-      ));
-      
-      setEditingRecipe(null);
-      toast.success('המתכון עודכן בהצלחה');
-    } catch (err) {
-      console.error('שגיאה בעדכון המתכון:', err);
-      toast.error('אירעה שגיאה בעדכון המתכון');
-    }
-  };
+      fetchRecipes();
+    }, []);
   
-  const handleSaveNewRecipe = async () => {
-    if (!newRecipe.name.trim()) {
-      toast.error('שם המתכון הוא שדה חובה');
-      return;
-    }
+    const handleAddRecipe = () => {
+      setIsAddingNew(true);
+      setNewRecipe({
+        name: '',
+        description: '',
+        prepTime: '',
+        servings: '',
+        ingredients: [{ amount: '', name: '' }],
+        instructions: [''],
+        notes: '',
+        imageFile: null,
+        imageUrl: ''
+      });
+      setPreviewUrl('');
+    };
     
-    // וידוא שיש לפחות מרכיב אחד עם שם
-    if (!newRecipe.ingredients.some(i => i.name.trim())) {
-      toast.error('יש להוסיף לפחות מרכיב אחד');
-      return;
-    }
-    
-    // וידוא שיש לפחות הוראה אחת
-    if (!newRecipe.instructions.some(i => i.trim())) {
-      toast.error('יש להוסיף לפחות הוראת הכנה אחת');
-      return;
-    }
-    
-    try {
-      // בגרסה זו אנחנו מתעלמים מהתמונה
-      const addedRecipe = await addRecipe(
-        {
-          name: newRecipe.name,
-          description: newRecipe.description,
-          prepTime: newRecipe.prepTime,
-          servings: newRecipe.servings,
-          ingredients: newRecipe.ingredients.filter(i => i.name.trim()),
-          instructions: newRecipe.instructions.filter(i => i.trim()),
-          notes: newRecipe.notes
+    const handleEditRecipe = (recipe) => {
+      setEditingRecipe({ 
+        ...recipe,
+        ingredients: recipe.ingredients || [{ amount: '', name: '' }],
+        instructions: recipe.instructions || [''],
+        imageFile: null
+      });
+      setPreviewUrl(recipe.imageUrl || '');
+    };
+    const handleDeleteRecipe = async (recipeId) => {
+        if (!window.confirm('האם אתה בטוח שברצונך למחוק מתכון זה?')) {
+          return;
         }
-        // הסרנו את הפרמטר של התמונה
-      );
-      
-      // הוספה לרשימה המקומית עם תמונת ברירת מחדל
-      setRecipes([
-        ...recipes, 
-        { 
-          ...newRecipe, 
-          id: addedRecipe.id,
-          imageUrl: '/images/default-recipe.jpg'
+        
+        try {
+          setLoading(true);
+          await deleteRecipe(recipeId);
+          setRecipes(recipes.filter(recipe => recipe.id !== recipeId));
+          toast.success('המתכון נמחק בהצלחה');
+          setLoading(false);
+        } catch (err) {
+          console.error('שגיאה במחיקת מתכון:', err);
+          toast.error('אירעה שגיאה במחיקת המתכון');
+          setLoading(false);
         }
-      ]);
+      };
       
-      setIsAddingNew(false);
-      toast.success('המתכון נוסף בהצלחה');
-    } catch (err) {
-      console.error('שגיאה בהוספת מתכון חדש:', err);
-      toast.error('אירעה שגיאה בהוספת המתכון');
-    }
-  };
-  
-  const handleCancelEdit = () => {
-    setEditingRecipe(null);
-    setPreviewUrl('');
-  };
-  
-  const handleCancelAdd = () => {
-    setIsAddingNew(false);
-    setPreviewUrl('');
-  };
+      const handleImageChange = (e, isEditing) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // וידוא שהקובץ הוא תמונה
+        if (!file.type.match('image.*')) {
+          toast.error('יש לבחור קובץ תמונה בלבד');
+          return;
+        }
+        
+        // וידוא שגודל הקובץ סביר (למשל, פחות מ-5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          toast.error('גודל התמונה חייב להיות פחות מ-5MB');
+          return;
+        }
+        
+        // יצירת URL מקומי לתצוגה מקדימה
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
+        
+        if (isEditing) {
+          setEditingRecipe({
+            ...editingRecipe,
+            imageFile: file
+          });
+        } else {
+          setNewRecipe({
+            ...newRecipe,
+            imageFile: file
+          });
+        }
+      };
+      
+      const handleAddIngredient = (isEditing) => {
+        if (isEditing) {
+          setEditingRecipe({
+            ...editingRecipe,
+            ingredients: [...editingRecipe.ingredients, { amount: '', name: '' }]
+          });
+        } else {
+          setNewRecipe({
+            ...newRecipe,
+            ingredients: [...newRecipe.ingredients, { amount: '', name: '' }]
+          });
+        }
+      };
+      
+      const handleRemoveIngredient = (index, isEditing) => {
+        if (isEditing) {
+          const ingredients = [...editingRecipe.ingredients];
+          ingredients.splice(index, 1);
+          setEditingRecipe({
+            ...editingRecipe,
+            ingredients
+          });
+        } else {
+          const ingredients = [...newRecipe.ingredients];
+          ingredients.splice(index, 1);
+          setNewRecipe({
+            ...newRecipe,
+            ingredients
+          });
+        }
+      };
+      const handleIngredientChange = (index, field, value, isEditing) => {
+        if (isEditing) {
+          const ingredients = [...editingRecipe.ingredients];
+          ingredients[index][field] = value;
+          setEditingRecipe({
+            ...editingRecipe,
+            ingredients
+          });
+        } else {
+          const ingredients = [...newRecipe.ingredients];
+          ingredients[index][field] = value;
+          setNewRecipe({
+            ...newRecipe,
+            ingredients
+          });
+        }
+      };
+      
+      const handleAddInstruction = (isEditing) => {
+        if (isEditing) {
+          setEditingRecipe({
+            ...editingRecipe,
+            instructions: [...editingRecipe.instructions, '']
+          });
+        } else {
+          setNewRecipe({
+            ...newRecipe,
+            instructions: [...newRecipe.instructions, '']
+          });
+        }
+      };
+      
+      const handleRemoveInstruction = (index, isEditing) => {
+        if (isEditing) {
+          const instructions = [...editingRecipe.instructions];
+          instructions.splice(index, 1);
+          setEditingRecipe({
+            ...editingRecipe,
+            instructions
+          });
+        } else {
+          const instructions = [...newRecipe.instructions];
+          instructions.splice(index, 1);
+          setNewRecipe({
+            ...newRecipe,
+            instructions
+          });
+        }
+      };
+      
+      const handleInstructionChange = (index, value, isEditing) => {
+        if (isEditing) {
+          const instructions = [...editingRecipe.instructions];
+          instructions[index] = value;
+          setEditingRecipe({
+            ...editingRecipe,
+            instructions
+          });
+        } else {
+          const instructions = [...newRecipe.instructions];
+          instructions[index] = value;
+          setNewRecipe({
+            ...newRecipe,
+            instructions
+          });
+        }
+      };
 
-  if (loading) {
-    return <LoadingState>טוען מתכונים...</LoadingState>;
-  }
-
-  return (
-    <RecipesContainer>
-      <RecipesHeader>
-        <RecipesTitle>
-          <FaBook />
-          ניהול מתכונים
-        </RecipesTitle>
-        <AddButton onClick={handleAddRecipe}>
-          <FaPlus />
-          הוסף מתכון חדש
-        </AddButton>
-      </RecipesHeader>
+      const handleSaveRecipe = async () => {
+        if (!editingRecipe.name.trim()) {
+          toast.error('שם המתכון הוא שדה חובה');
+          return;
+        }
+        
+        // וידוא שיש לפחות מרכיב אחד עם שם
+        if (!editingRecipe.ingredients.some(i => i.name.trim())) {
+          toast.error('יש להוסיף לפחות מרכיב אחד');
+          return;
+        }
+        
+        // וידוא שיש לפחות הוראה אחת
+        if (!editingRecipe.instructions.some(i => i.trim())) {
+          toast.error('יש להוסיף לפחות הוראת הכנה אחת');
+          return;
+        }
+        
+        try {
+          setLoading(true);
+          
+          await updateRecipe(
+            editingRecipe.id, 
+            {
+              name: editingRecipe.name,
+              description: editingRecipe.description,
+              prepTime: editingRecipe.prepTime,
+              servings: editingRecipe.servings,
+              ingredients: editingRecipe.ingredients.filter(i => i.name.trim()),
+              instructions: editingRecipe.instructions.filter(i => i.trim()),
+              notes: editingRecipe.notes
+            },
+            editingRecipe.imageFile
+          );
+          
+          // קבל מחדש את כל המתכונים כדי לקבל את ה-URL העדכני של התמונה מ-Cloudinary
+          const updatedRecipes = await getRecipes();
+          setRecipes(updatedRecipes);
+          
+          setEditingRecipe(null);
+          setPreviewUrl('');
+          toast.success('המתכון עודכן בהצלחה');
+          setLoading(false);
+        } catch (err) {
+          console.error('שגיאה בעדכון המתכון:', err);
+          toast.error('אירעה שגיאה בעדכון המתכון');
+          setLoading(false);
+        }
+      };
       
-      <RecipesList>
-        {recipes.map((recipe) => (
-          <RecipeCard key={recipe.id} editing={editingRecipe?.id === recipe.id}>
-            <RecipeContent>
-              <RecipeInfo>
-                <RecipeImageThumb imageUrl={recipe.imageUrl} />
-                <RecipeDetails>
-                  <h3>{recipe.name}</h3>
-                  {recipe.description && <p>{recipe.description}</p>}
-                </RecipeDetails>
-              </RecipeInfo>
-              <RecipeActions>
-                <ActionButton onClick={() => handleEditRecipe(recipe)}>
-                  <FaEdit />
-                </ActionButton>
-                <ActionButton delete onClick={() => handleDeleteRecipe(recipe.id)}>
-                  <FaTrash />
-                </ActionButton>
-              </RecipeActions>
-            </RecipeContent>
-            
-            {editingRecipe?.id === recipe.id && (
+      const handleSaveNewRecipe = async () => {
+        if (!newRecipe.name.trim()) {
+          toast.error('שם המתכון הוא שדה חובה');
+          return;
+        }
+        
+        // וידוא שיש לפחות מרכיב אחד עם שם
+        if (!newRecipe.ingredients.some(i => i.name.trim())) {
+          toast.error('יש להוסיף לפחות מרכיב אחד');
+          return;
+        }
+        
+        // וידוא שיש לפחות הוראה אחת
+        if (!newRecipe.instructions.some(i => i.trim())) {
+          toast.error('יש להוסיף לפחות הוראת הכנה אחת');
+          return;
+        }
+        
+        try {
+          setLoading(true);
+          
+          await addRecipe(
+            {
+              name: newRecipe.name,
+              description: newRecipe.description,
+              prepTime: newRecipe.prepTime,
+              servings: newRecipe.servings,
+              ingredients: newRecipe.ingredients.filter(i => i.name.trim()),
+              instructions: newRecipe.instructions.filter(i => i.trim()),
+              notes: newRecipe.notes
+            },
+            newRecipe.imageFile
+          );
+          
+          // קבל מחדש את כל המתכונים כדי לקבל את ה-URL העדכני של התמונה מ-Cloudinary
+          const updatedRecipes = await getRecipes();
+          setRecipes(updatedRecipes);
+          
+          setIsAddingNew(false);
+          setPreviewUrl('');
+          toast.success('המתכון נוסף בהצלחה');
+          setLoading(false);
+        } catch (err) {
+          console.error('שגיאה בהוספת מתכון חדש:', err);
+          toast.error('אירעה שגיאה בהוספת המתכון');
+          setLoading(false);
+        }
+      };
+      
+      const handleCancelEdit = () => {
+        setEditingRecipe(null);
+        setPreviewUrl('');
+      };
+      
+      const handleCancelAdd = () => {
+        setIsAddingNew(false);
+        setPreviewUrl('');
+      };
+
+      if (loading && recipes.length === 0) {
+        return <LoadingState>טוען מתכונים...</LoadingState>;
+      }
+    
+      return (
+        <RecipesContainer>
+          <RecipesHeader>
+            <RecipesTitle>
+              <FaBook />
+              ניהול מתכונים
+            </RecipesTitle>
+            <AddButton onClick={handleAddRecipe}>
+              <FaPlus />
+              הוסף מתכון חדש
+            </AddButton>
+          </RecipesHeader>
+          
+          <RecipesList>
+            {recipes.map((recipe) => (
+              <RecipeCard key={recipe.id} editing={editingRecipe?.id === recipe.id}>
+                <RecipeContent>
+                  <RecipeInfo>
+                    <RecipeImageThumb imageUrl={recipe.imageUrl} />
+                    <RecipeDetails>
+                      <h3>{recipe.name}</h3>
+                      {recipe.description && <p>{recipe.description}</p>}
+                    </RecipeDetails>
+                  </RecipeInfo>
+                  <RecipeActions>
+                    <ActionButton onClick={() => handleEditRecipe(recipe)}>
+                      <FaEdit />
+                    </ActionButton>
+                    <ActionButton delete onClick={() => handleDeleteRecipe(recipe.id)}>
+                      <FaTrash />
+                    </ActionButton>
+                  </RecipeActions>
+                </RecipeContent>
+
+                {editingRecipe?.id === recipe.id && (
               <RecipeForm editing>
                 <FormGrid>
                   <FormGroup>
@@ -730,7 +738,7 @@ const AdminRecipes = () => {
                 <FormGroup>
                   <Label>תמונה</Label>
                   <ImageUploadContainer>
-                    <ImagePreview imageUrl={previewUrl} />
+                    <ImagePreview imageUrl={previewUrl || editingRecipe.imageUrl} />
                     <FileUploadLabel>
                       <FaImage />
                       בחר תמונה
@@ -738,13 +746,12 @@ const AdminRecipes = () => {
                         type="file" 
                         accept="image/*"
                         onChange={(e) => handleImageChange(e, true)}
-                        disabled={true}
                       />
                     </FileUploadLabel>
-                    <Small>שירות התמונות אינו זמין כרגע, תמונת ברירת מחדל תוצג לכל המתכונים.</Small>
+                    <Small>התמונה תועלה לשרת Cloudinary. גודל מקסימלי: 5MB.</Small>
                   </ImageUploadContainer>
                 </FormGroup>
-                
+
                 <FormGroup>
                   <Label>מרכיבים</Label>
                   <IngredientsList>
@@ -805,7 +812,7 @@ const AdminRecipes = () => {
                     </AddInstructionButton>
                   </InstructionsList>
                 </FormGroup>
-                
+
                 <FormGroup>
                   <Label>הערות נוספות</Label>
                   <Textarea
@@ -819,9 +826,9 @@ const AdminRecipes = () => {
                     <FaTimes />
                     ביטול
                   </CancelButton>
-                  <SaveButton onClick={handleSaveRecipe}>
+                  <SaveButton onClick={handleSaveRecipe} disabled={loading}>
                     <FaSave />
-                    שמור
+                    {loading ? 'שומר...' : 'שמור'}
                   </SaveButton>
                 </FormActions>
               </RecipeForm>
@@ -867,25 +874,7 @@ const AdminRecipes = () => {
                   />
                 </FormGroup>
               </FormGrid>
-              
-              <FormGroup>
-                <Label>תמונה</Label>
-                <ImageUploadContainer>
-                  <ImagePreview imageUrl={previewUrl || '/images/default-recipe.jpg'} />
-                  <FileUploadLabel>
-                    <FaImage />
-                    בחר תמונה
-                    <FileInput 
-                      type="file" 
-                      accept="image/*"
-                      onChange={(e) => handleImageChange(e, false)}
-                      disabled={true}
-                    />
-                  </FileUploadLabel>
-                  <Small>שירות התמונות אינו זמין כרגע, תמונת ברירת מחדל תוצג לכל המתכונים.</Small>
-                </ImageUploadContainer>
-              </FormGroup>
-              
+
               <FormGroup>
                 <Label>מרכיבים</Label>
                 <IngredientsList>
@@ -920,7 +909,7 @@ const AdminRecipes = () => {
                   </AddIngredientButton>
                 </IngredientsList>
               </FormGroup>
-              
+
               <FormGroup>
                 <Label>הוראות הכנה</Label>
                 <InstructionsList>
@@ -960,9 +949,9 @@ const AdminRecipes = () => {
                   <FaTimes />
                   ביטול
                 </CancelButton>
-                <SaveButton onClick={handleSaveNewRecipe}>
+                <SaveButton onClick={handleSaveNewRecipe} disabled={loading}>
                   <FaSave />
-                  שמור
+                  {loading ? 'שומר...' : 'שמור'}
                 </SaveButton>
               </FormActions>
             </RecipeForm>
@@ -980,3 +969,4 @@ const AdminRecipes = () => {
 };
 
 export default AdminRecipes;
+
