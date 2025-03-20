@@ -29,6 +29,10 @@ const Icon = styled.div`
 const SearchContainer = styled.div`
   display: flex;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    margin-bottom: 1.5rem;
+  }
 `;
 
 const SearchInput = styled.div`
@@ -61,6 +65,16 @@ const RecipesGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 1rem;
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
+  }
 `;
 
 const RecipeCard = styled(Link)`
@@ -77,6 +91,13 @@ const RecipeCard = styled(Link)`
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     text-decoration: none;
   }
+  
+  @media (max-width: 768px) {
+    /* במסכים קטנים, הקטן את אפקט התנועה כדי שלא יפריע */
+    &:hover {
+      transform: translateY(-2px);
+    }
+  }
 `;
 
 const RecipeImage = styled.div`
@@ -84,15 +105,32 @@ const RecipeImage = styled.div`
   background-image: url(${props => props.imageUrl || '/images/default-recipe.jpg'});
   background-size: cover;
   background-position: center;
+  
+  @media (max-width: 768px) {
+    height: 140px;
+  }
+  
+  @media (max-width: 480px) {
+    height: 120px;
+  }
 `;
 
 const RecipeContent = styled.div`
   padding: 1.25rem;
+  
+  @media (max-width: 768px) {
+    padding: 0.75rem;
+  }
 `;
 
 const RecipeName = styled.h3`
   font-size: 1.25rem;
   margin: 0 0 0.5rem 0;
+  
+  @media (max-width: 768px) {
+    font-size: 1rem;
+    margin: 0 0 0.25rem 0;
+  }
 `;
 
 const RecipeDescription = styled.p`

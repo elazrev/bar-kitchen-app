@@ -39,7 +39,14 @@ const CardHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
 `;
+
 
 const CardTitle = styled.h2`
   font-size: 1.5rem;
@@ -56,12 +63,24 @@ const DateRangeSelector = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
 `;
 
 const DateInput = styled.input`
   padding: 0.5rem;
   border: 1px solid var(--light-gray);
   border-radius: var(--border-radius);
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.7rem;
+  }
 `;
 
 const Table = styled.table`
@@ -132,6 +151,11 @@ const SummaryCard = styled.div`
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
+  
+  @media (max-width: 768px) {
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
 `;
 
 const SummaryIcon = styled.div`
@@ -152,6 +176,10 @@ const SummaryTitle = styled.h4`
 const SummaryValue = styled.div`
   font-size: 2rem;
   font-weight: 600;
+  
+  @media (max-width: 768px) {
+    font-size: 1.75rem;
+  }
 `;
 
 const ReportGrid = styled.div`
@@ -159,7 +187,17 @@ const ReportGrid = styled.div`
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
 `;
+
 
 const TaskReportDetails = styled.div`
   margin-top: 1rem;
@@ -167,6 +205,11 @@ const TaskReportDetails = styled.div`
   background-color: #f9f9f9;
   border-radius: var(--border-radius);
   border-right: 4px solid var(--primary-color);
+  
+  @media (max-width: 768px) {
+    padding: 0.8rem;
+    font-size: 0.95rem;
+  }
 `;
 
 const TaskItem = styled.div`
@@ -177,6 +220,15 @@ const TaskItem = styled.div`
     border-bottom: none;
   }
 `;
+
+const TableContainer = styled.div`
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+  border-radius: var(--border-radius);
+`;
+
+
 
 const Reports = () => {
   const [startDate, setStartDate] = useState(() => {

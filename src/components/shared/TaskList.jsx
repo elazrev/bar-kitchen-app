@@ -22,6 +22,10 @@ const TaskItem = styled.div`
   &:hover {
     background-color: #f9f9f9;
   }
+  
+  @media (max-width: 768px) {
+    padding: 0.8rem;
+  }
 `;
 
 const TaskCheckbox = styled.input`
@@ -29,6 +33,12 @@ const TaskCheckbox = styled.input`
   width: 1.25rem;
   height: 1.25rem;
   cursor: pointer;
+  
+  @media (max-width: 768px) {
+    width: 1.5rem;
+    height: 1.5rem;
+    margin-left: 0.75rem;
+  }
 `;
 
 const TaskContent = styled.div`
@@ -38,16 +48,31 @@ const TaskContent = styled.div`
 const TaskTitle = styled.h3`
   font-size: 1.1rem;
   margin-bottom: 0.5rem;
+  
+  @media (max-width: 768px) {
+    font-size: 1rem;
+  }
 `;
 
 const TaskDescription = styled.p`
   color: #666;
+  
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+  }
 `;
 
 const ReportButtonContainer = styled.div`
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-top: 1.5rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
 `;
 
 const ReportButton = styled.button`
@@ -60,6 +85,7 @@ const ReportButton = styled.button`
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
   transition: background-color 0.3s;
   
   &:hover {
@@ -74,11 +100,21 @@ const ReportButton = styled.button`
   svg {
     margin-left: 0.5rem;
   }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.875rem;
+  }
 `;
 
 const ProgressText = styled.p`
   font-size: 1rem;
   color: #666;
+  
+  @media (max-width: 768px) {
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
 `;
 
 const TaskList = ({ tasks, type }) => {

@@ -30,6 +30,13 @@ const RecipesHeader = styled.div`
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
 `;
 
 const RecipesTitle = styled.h2`
@@ -51,6 +58,7 @@ const AddButton = styled.button`
   padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
   
   svg {
@@ -59,6 +67,11 @@ const AddButton = styled.button`
   
   &:hover {
     background-color: #1e3a6a;
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.75rem;
   }
 `;
 
@@ -77,6 +90,10 @@ const RecipeContent = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+  }
 `;
 
 const RecipeInfo = styled.div`
@@ -102,6 +119,12 @@ const RecipeDetails = styled.div`
 const RecipeActions = styled.div`
   display: flex;
   gap: 0.5rem;
+  
+  @media (max-width: 480px) {
+    width: 100%;
+    margin-top: 0.75rem;
+    justify-content: flex-end;
+  }
 `;
 
 const ActionButton = styled.button`
@@ -231,6 +254,15 @@ const IngredientItem = styled.div`
   > div:last-child {
     flex: 2;
   }
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 0.3rem;
+    
+    > div:first-child, > div:last-child {
+      width: 100%;
+    }
+  }
 `;
 
 const AddIngredientButton = styled.button`
@@ -282,6 +314,11 @@ const FormActions = styled.div`
   justify-content: flex-end;
   gap: 1rem;
   margin-top: 1rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
 `;
 
 const SaveButton = styled.button`
@@ -292,6 +329,7 @@ const SaveButton = styled.button`
   padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
   
   svg {
@@ -300,6 +338,11 @@ const SaveButton = styled.button`
   
   &:hover {
     background-color: #3d8b40;
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.75rem;
   }
 `;
 
@@ -311,6 +354,7 @@ const CancelButton = styled.button`
   padding: 0.5rem 1rem;
   display: flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
   
   svg {
@@ -319,6 +363,11 @@ const CancelButton = styled.button`
   
   &:hover {
     background-color: #d32f2f;
+  }
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    padding: 0.75rem;
   }
 `;
 
