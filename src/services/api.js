@@ -9,10 +9,10 @@ import {
     query,
     where,
     serverTimestamp,
-    orderBy
+    orderBy,
+    Timestamp
   } from 'firebase/firestore';
-  import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-  import { db, storage } from './firebase';
+  import { db } from './firebase';
   
   // נהלי פתיחה
   export const getOpeningTasks = async () => {
@@ -109,36 +109,23 @@ import {
   };
   
   export const addRecipe = async (recipeData, imageFile) => {
-    // העלאת התמונה, אם קיימת
-    let imageUrl = '';
-    if (imageFile) {
-      const storageRef = ref(storage, `recipes/${Date.now()}_${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
-    }
+    // הגדרת תמונת ברירת מחדל קבועה במקום להעלות תמונה
+    const defaultImageUrl = '/images/default-recipe.jpg';
     
     const recipesRef = collection(db, 'recipes');
     return await addDoc(recipesRef, {
       ...recipeData,
-      imageUrl,
+      imageUrl: defaultImageUrl,  // שימוש בקישור קבוע
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
   };
   
   export const updateRecipe = async (recipeId, recipeData, imageFile) => {
-    // העלאת תמונה חדשה, אם קיימת
-    let updateData = { ...recipeData };
-    
-    if (imageFile) {
-      const storageRef = ref(storage, `recipes/${Date.now()}_${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      updateData.imageUrl = await getDownloadURL(storageRef);
-    }
-    
+    // אין צורך לטפל בתמונות בגרסה זו
     const recipeRef = doc(db, 'recipes', recipeId);
     await updateDoc(recipeRef, {
-      ...updateData,
+      ...recipeData,
       updatedAt: serverTimestamp()
     });
   };
@@ -148,16 +135,37 @@ import {
     await deleteDoc(recipeRef);
   };
   
-  // דיווחי חוסרים
+  // קבלת חוסרים, כולל אלה שנמחקו בשלושת הימים האחרונים
   export const getShortages = async () => {
     const shortagesRef = collection(db, 'shortages');
     const q = query(shortagesRef, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const currentDate = new Date();
+    const threeDaysAgo = new Date(currentDate);
+    threeDaysAgo.setDate(currentDate.getDate() - 3);
+    
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      // בדיקה אם הפריט נמחק אבל עדיין לא עברו 3 ימים
+      const isRecentlyDeleted = data.deletedAt && 
+                               new Date(data.deletedAt.toDate()) > threeDaysAgo;
+      
+      return {
+        id: doc.id,
+        ...data,
+        // נשמור את הפריט אם הוא לא נמחק או שנמחק לאחרונה
+        visible: !data.deletedAt || isRecentlyDeleted,
+        // האם הפריט נמחק אבל עדיין נראה
+        recentlyDeleted: isRecentlyDeleted,
+        // המרת timestamps לתאריכים רגילים לקריאות
+        createdAt: data.createdAt ? data.createdAt.toDate() : new Date(),
+        deletedAt: data.deletedAt ? data.deletedAt.toDate() : null,
+        resolvedAt: data.resolvedAt ? data.resolvedAt.toDate() : null
+      };
+    })
+    // נפטור רק פריטים שעדיין צריכים להיות נראים
+    .filter(item => item.visible);
   };
   
   export const addShortage = async (shortageData) => {
@@ -169,16 +177,47 @@ import {
     });
   };
   
+  // עדכון: במקום למחוק חוסרים, נסמן אותם כנמחקים
   export const resolveShortage = async (shortageId) => {
     const shortageRef = doc(db, 'shortages', shortageId);
     await updateDoc(shortageRef, {
+      deletedAt: serverTimestamp(),
       resolved: true,
       resolvedAt: serverTimestamp()
     });
   };
   
   // דוחות
-  export const getReports = async (startDate, endDate) => {
+  export const getTaskCompletionReports = async (startDate, endDate) => {
     // יצירת דוחות לפי טווח תאריכים
-    // כאן ניתן להוסיף היגיון עסקי נוסף לפי צורך
+    const reportsRef = collection(db, 'taskReports');
+    
+    // המרה לתאריכי firebase
+    const startTimestamp = Timestamp.fromDate(new Date(startDate));
+    const endTimestamp = Timestamp.fromDate(new Date(endDate));
+    
+    const q = query(
+      reportsRef, 
+      where('date', '>=', startTimestamp),
+      where('date', '<=', endTimestamp),
+      orderBy('date', 'desc')
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      date: doc.data().date.toDate()
+    }));
+  };
+  
+  // שמירת דיווח השלמת משימות
+  export const saveTaskReport = async (reportData) => {
+    const reportsRef = collection(db, 'taskReports');
+    return await addDoc(reportsRef, {
+      ...reportData,
+      date: serverTimestamp(),
+      createdAt: serverTimestamp()
+    });
   };

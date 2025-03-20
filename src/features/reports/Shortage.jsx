@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { FaExclamationTriangle, FaPlus, FaTrash } from 'react-icons/fa';
 import { useApp } from '../../hooks/useApp';
-import { addShortage } from '../../services/api';
+import { addShortage, resolveShortage, getShortages } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
+import { toast } from 'react-toastify';
 
 const ShortageContainer = styled.div`
   padding: 2rem 0;
@@ -23,10 +24,7 @@ const Title = styled.h1`
 
 const Icon = styled.div`
   font-size: 2rem;
-  color: var(--accent-color  );
-};
-
-export default Shortage;
+  color: var(--accent-color);
 `;
 
 const Card = styled.div`
@@ -116,6 +114,7 @@ const ShortageItem = styled.div`
 
 const ItemName = styled.div`
   font-weight: 500;
+  ${props => props.deleted ? 'text-decoration: line-through; color: #999;' : ''}
 `;
 
 const ItemQuantity = styled.div`
@@ -133,6 +132,12 @@ const DeleteButton = styled.button`
   &:hover {
     color: #d32f2f;
   }
+`;
+
+const DeletedDate = styled.span`
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+  color: #999;
 `;
 
 const SubmitButton = styled.button`
@@ -171,8 +176,25 @@ const Shortage = () => {
   const [name, setName] = useState('');
   const [quantity, setQuantity] = useState('');
   const [items, setItems] = useState([]);
-  const { sendShortageReport, shortages, removeShortage, loading } = useApp();
+  const [shortages, setShortages] = useState([]);
+  const { loading, setLoading } = useApp();
   const { isAdmin } = useAuth();
+  
+  useEffect(() => {
+    const fetchShortages = async () => {
+      try {
+        setLoading(true);
+        const shortagesData = await getShortages();
+        setShortages(shortagesData);
+        setLoading(false);
+      } catch (err) {
+        console.error('שגיאה בטעינת חוסרים:', err);
+        setLoading(false);
+      }
+    };
+    
+    fetchShortages();
+  }, [setLoading]);
 
   const handleAddItem = () => {
     if (!name.trim()) return;
@@ -194,17 +216,80 @@ const Shortage = () => {
   };
   
   const handleRemoveReportedItem = async (id) => {
-    await removeShortage(id);
+    try {
+      setLoading(true);
+      
+      // במקום למחוק את הפריט לגמרי, נשנה את הסטטוס שלו ל-"נמחק"
+      await resolveShortage(id);
+      
+      // עדכון הרשימה המקומית
+      const updatedShortages = shortages.map(item => 
+        item.id === id 
+          ? { 
+              ...item, 
+              recentlyDeleted: true, 
+              deletedAt: new Date(),
+              resolved: true
+            } 
+          : item
+      );
+      
+      setShortages(updatedShortages);
+      toast.success('הפריט סומן כ"טופל"');
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('שגיאה בטיפול בפריט:', err);
+      toast.error('אירעה שגיאה בטיפול בפריט');
+      setLoading(false);
+    }
   };
   
   const handleSubmit = async () => {
     if (items.length === 0) return;
     
-    // קריאה לשרת דרך הקונטקסט
-    await sendShortageReport(items);
-    setItems([]);
+    try {
+      setLoading(true);
+      
+      // שמירת כל הפריטים בבסיס הנתונים
+      const savedItems = [];
+      
+      for (const item of items) {
+        const savedItem = await addShortage({
+          name: item.name,
+          quantity: item.quantity,
+          reportedAt: item.reportedAt
+        });
+        
+        savedItems.push({
+          id: savedItem.id,
+          name: item.name,
+          quantity: item.quantity,
+          createdAt: new Date(),
+          recentlyDeleted: false,
+          resolved: false
+        });
+      }
+      
+      // עדכון הרשימה המקומית
+      setShortages([...savedItems, ...shortages]);
+      setItems([]);
+      
+      toast.success(`הדיווח על ${savedItems.length} פריטים חסרים נשלח בהצלחה!`);
+      
+      setLoading(false);
+    } catch (err) {
+      console.error('שגיאה בשליחת דיווח חוסרים:', err);
+      toast.error('אירעה שגיאה בשליחת הדיווח');
+      setLoading(false);
+    }
   };
   
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'numeric', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('he-IL', options);
+  };
+
   return (
     <ShortageContainer>
       <Header>
@@ -279,17 +364,26 @@ const Shortage = () => {
           <CardTitle>פריטים חסרים שדווחו</CardTitle>
         </CardHeader>
         
-        {shortages.length > 0 ? (
+        {loading ? (
+          <EmptyState>טוען נתונים...</EmptyState>
+        ) : shortages.length > 0 ? (
           <ShortageList>
             {shortages.map((item) => (
               <ShortageItem key={item.id}>
                 <div>
-                  <ItemName>{item.name}</ItemName>
+                  <ItemName deleted={item.recentlyDeleted}>
+                    {item.name}
+                    {item.recentlyDeleted && (
+                      <DeletedDate>
+                        (טופל ב-{formatDate(item.deletedAt)})
+                      </DeletedDate>
+                    )}
+                  </ItemName>
                   <div style={{ fontSize: '0.8rem', color: '#888' }}>
                     כמות: {item.quantity}
                   </div>
                 </div>
-                {isAdmin() && (
+                {isAdmin() && !item.recentlyDeleted && (
                   <DeleteButton onClick={() => handleRemoveReportedItem(item.id)}>
                     <FaTrash />
                   </DeleteButton>
@@ -304,5 +398,5 @@ const Shortage = () => {
     </ShortageContainer>
   );
 };
-  
-  export default Shortage;
+
+export default Shortage;

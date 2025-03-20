@@ -1,5 +1,6 @@
-import { createContext, useState } from 'react';
+import { createContext, useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
+import { getShortages, saveTaskReport } from '../services/api';
 
 export const AppContext = createContext();
 
@@ -10,36 +11,47 @@ export const AppProvider = ({ children }) => {
   const [shortages, setShortages] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // טעינת נתוני חוסרים בטעינת האפליקציה
+  useEffect(() => {
+    const loadShortages = async () => {
+      try {
+        const shortagesData = await getShortages();
+        setShortages(shortagesData);
+      } catch (err) {
+        console.error('שגיאה בטעינת חוסרים:', err);
+      }
+    };
+    
+    loadShortages();
+  }, []);
+  
   // שלח דיווח על ביצוע משימות
-  const sendTasksReport = (type, completedTasks, totalTasks) => {
-    setLoading(true);
-    // כאן יש להוסיף קריאה לשרת לשליחת הדיווח
-    
-    // לצורך הדוגמה אנחנו מדמים תשובה מהשרת
-    setTimeout(() => {
-      toast.success(`דיווח על ${completedTasks} מתוך ${totalTasks} משימות ${type} נשלח בהצלחה!`);
-      setLoading(false);
-    }, 1000);
-  };
-  
-  // שלח דיווח על חוסרים
-  const sendShortageReport = (items) => {
+  const sendTasksReport = async (type, completedTasks, totalTasks) => {
     setLoading(true);
     
-    // לצורך הדוגמה אנחנו מדמים תשובה מהשרת
-    setTimeout(() => {
-      setShortages([...shortages, ...items]);
-      toast.success(`דיווח על ${items.length} פריטים חסרים נשלח בהצלחה!`);
+    try {
+      // בניית אובייקט הדיווח
+      const reportData = {
+        type,
+        completedTasks,
+        totalTasks,
+        completionRate: Math.round((completedTasks / totalTasks) * 100),
+        completedAt: new Date().toISOString(),
+        tasksList: type === 'opening' ? openingTasks : closingTasks
+      };
+      
+      // שמירת הדיווח בבסיס הנתונים
+      await saveTaskReport(reportData);
+      
+      toast.success(`דיווח על ${completedTasks} מתוך ${totalTasks} משימות ${type === 'opening' ? 'פתיחה' : 'סגירה'} נשלח בהצלחה!`);
+    } catch (err) {
+      console.error('שגיאה בשליחת דיווח משימות:', err);
+      toast.error('אירעה שגיאה בשליחת הדיווח');
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
   
-  // מחיקת פריט חסר מהרשימה (למנהלים)
-  const removeShortage = (id) => {
-    setShortages(shortages.filter(item => item.id !== id));
-    toast.info("הפריט הוסר מרשימת החוסרים");
-  };
-
   // התחלת ביצוע משימות בפתיחה
   const startOpeningTasks = (tasks) => {
     setOpeningTasks(tasks.map(task => ({ ...task, completed: false })));
@@ -69,13 +81,13 @@ export const AppProvider = ({ children }) => {
     recipes,
     shortages,
     loading,
+    setLoading,
     sendTasksReport,
-    sendShortageReport,
-    removeShortage,
     startOpeningTasks,
     startClosingTasks,
     updateTaskStatus,
-    setRecipes
+    setRecipes,
+    setShortages
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

@@ -1,0 +1,454 @@
+import { useState, useEffect } from 'react';
+import styled from 'styled-components';
+import { FaChartBar, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { getShortages, getTaskCompletionReports } from '../../services/api';
+
+const ReportsContainer = styled.div`
+  padding: 2rem 0;
+`;
+
+const Header = styled.div`
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+`;
+
+const Title = styled.h1`
+  font-size: 1.8rem;
+  margin: 0;
+  margin-right: 0.75rem;
+`;
+
+const Icon = styled.div`
+  font-size: 2rem;
+  color: var(--primary-color);
+`;
+
+const Card = styled.div`
+  background-color: white;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
+  padding: 2rem;
+  margin-bottom: 2rem;
+`;
+
+const CardHeader = styled.div`
+  border-bottom: 1px solid var(--light-gray);
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const CardTitle = styled.h2`
+  font-size: 1.5rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  
+  svg {
+    margin-left: 0.75rem;
+  }
+`;
+
+const DateRangeSelector = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const DateInput = styled.input`
+  padding: 0.5rem;
+  border: 1px solid var(--light-gray);
+  border-radius: var(--border-radius);
+`;
+
+const Table = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+`;
+
+const Th = styled.th`
+  text-align: right;
+  padding: 0.75rem;
+  background-color: #f9f9f9;
+  border-bottom: 1px solid var(--light-gray);
+`;
+
+const Td = styled.td`
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--light-gray);
+`;
+
+const SectionTitle = styled.h3`
+  margin: 1.5rem 0 1rem 0;
+  display: flex;
+  align-items: center;
+  
+  svg {
+    margin-left: 0.5rem;
+    color: var(--primary-color);
+  }
+`;
+
+const StatusBadge = styled.span`
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: white;
+  background-color: ${props => 
+    props.status === 'completed' ? 'var(--success-color)' : 
+    props.status === 'pending' ? 'var(--warning-color)' : 
+    props.status === 'resolved' ? 'var(--success-color)' : 
+    props.status === 'unresolved' ? 'var(--error-color)' : 
+    'var(--primary-color)'
+  };
+`;
+
+const DeletedItemText = styled.span`
+  text-decoration: line-through;
+  color: #999;
+`;
+
+const DeletedDate = styled.span`
+  font-size: 0.8rem;
+  margin-right: 0.5rem;
+  color: #999;
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+`;
+
+const SummaryCard = styled.div`
+  background-color: ${props => props.bgColor || '#f9f9f9'};
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+`;
+
+const SummaryIcon = styled.div`
+  font-size: 2rem;
+  color: ${props => props.color || 'var(--primary-color)'};
+  margin-left: 1rem;
+`;
+
+const SummaryContent = styled.div`
+  flex: 1;
+`;
+
+const SummaryTitle = styled.h4`
+  font-size: 1.2rem;
+  margin: 0 0 0.5rem 0;
+`;
+
+const SummaryValue = styled.div`
+  font-size: 2rem;
+  font-weight: 600;
+`;
+
+const ReportGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const Reports = () => {
+  const [startDate, setStartDate] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date.toISOString().split('T')[0];
+  });
+  
+  const [endDate, setEndDate] = useState(() => {
+    const date = new Date();
+    return date.toISOString().split('T')[0];
+  });
+  
+  const [openingReports, setOpeningReports] = useState([]);
+  const [closingReports, setClosingReports] = useState([]);
+  const [shortageData, setShortageData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchReportsData = async () => {
+      try {
+        setLoading(true);
+        
+        // נסה לקבל דוחות משימות מהשרת
+        let reportsData = [];
+        try {
+          reportsData = await getTaskCompletionReports(startDate, endDate);
+        } catch (err) {
+          console.warn('לא נמצאו דוחות משימות', err);
+          // אם אין דוחות, נשתמש במערך ריק
+          reportsData = [];
+        }
+        
+        // מיון הדוחות לפי סוגים
+        const openingData = reportsData.filter(report => report.type === 'opening');
+        const closingData = reportsData.filter(report => report.type === 'closing');
+        
+        setOpeningReports(openingData);
+        setClosingReports(closingData);
+        
+        // קבלת נתוני חוסרים
+        const shortagesResult = await getShortages();
+        
+        // עיבוד הנתונים עבור הדוח
+        const processedShortages = shortagesResult.map(shortage => ({
+          id: shortage.id,
+          itemName: shortage.name,
+          reportedAt: new Date(shortage.createdAt),
+          quantity: shortage.quantity,
+          status: shortage.resolved ? 'resolved' : 'unresolved',
+          recentlyDeleted: shortage.recentlyDeleted,
+          deletedAt: shortage.deletedAt
+        }));
+        
+        setShortageData(processedShortages);
+        setLoading(false);
+      } catch (err) {
+        console.error('שגיאה בטעינת נתוני דוחות:', err);
+        setLoading(false);
+      }
+    };
+    
+    fetchReportsData();
+  }, [startDate, endDate]);
+
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'numeric', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString('he-IL', options);
+  };
+  
+  const formatDateTime = (dateString) => {
+    const options = { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' };
+    return new Date(dateString).toLocaleDateString('he-IL', options);
+  };
+  
+  // חישוב סיכומים
+  const totalOpeningTasks = openingReports.reduce((sum, report) => sum + (report.completedTasks || 0), 0);
+  const totalClosingTasks = closingReports.reduce((sum, report) => sum + (report.completedTasks || 0), 0);
+  const activeShortages = shortageData.filter(item => item.status === 'unresolved' && !item.recentlyDeleted).length;
+  const resolvedShortages = shortageData.filter(item => item.status === 'resolved' || item.recentlyDeleted).length;
+
+  return (
+    <ReportsContainer>
+      <Header>
+        <Icon>
+          <FaChartBar />
+        </Icon>
+        <Title>דוחות</Title>
+      </Header>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            <FaCalendarAlt />
+            טווח תאריכים
+          </CardTitle>
+          <DateRangeSelector>
+            <div>
+              <label htmlFor="startDate">מתאריך: </label>
+              <DateInput
+                type="date"
+                id="startDate"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label htmlFor="endDate">עד תאריך: </label>
+              <DateInput
+                type="date"
+                id="endDate"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </DateRangeSelector>
+        </CardHeader>
+        
+        {loading ? (
+          <EmptyState>טוען נתונים...</EmptyState>
+        ) : (
+          <>
+            <ReportGrid>
+              <SummaryCard bgColor="#e3f2fd">
+                <SummaryIcon color="#1976d2">
+                  <FaCheckCircle />
+                </SummaryIcon>
+                <SummaryContent>
+                  <SummaryTitle>השלמת משימות פתיחה</SummaryTitle>
+                  <SummaryValue>{totalOpeningTasks}</SummaryValue>
+                </SummaryContent>
+              </SummaryCard>
+              
+              <SummaryCard bgColor="#e8f5e9">
+                <SummaryIcon color="#388e3c">
+                  <FaCheckCircle />
+                </SummaryIcon>
+                <SummaryContent>
+                  <SummaryTitle>השלמת משימות סגירה</SummaryTitle>
+                  <SummaryValue>{totalClosingTasks}</SummaryValue>
+                </SummaryContent>
+              </SummaryCard>
+              
+              <SummaryCard bgColor="#fff3e0">
+                <SummaryIcon color="#f57c00">
+                  <FaExclamationTriangle />
+                </SummaryIcon>
+                <SummaryContent>
+                  <SummaryTitle>חוסרים פעילים</SummaryTitle>
+                  <SummaryValue>{activeShortages}</SummaryValue>
+                </SummaryContent>
+              </SummaryCard>
+              
+              <SummaryCard bgColor="#ffebee">
+                <SummaryIcon color="#d32f2f">
+                  <FaExclamationTriangle />
+                </SummaryIcon>
+                <SummaryContent>
+                  <SummaryTitle>חוסרים שטופלו</SummaryTitle>
+                  <SummaryValue>{resolvedShortages}</SummaryValue>
+                </SummaryContent>
+              </SummaryCard>
+            </ReportGrid>
+            
+            <SectionTitle>
+              <FaCheckCircle />
+              דוח ביצוע משימות פתיחה
+            </SectionTitle>
+            
+            {openingReports.length > 0 ? (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>תאריך</Th>
+                    <Th>משימות שהושלמו</Th>
+                    <Th>סה"כ משימות</Th>
+                    <Th>אחוז השלמה</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openingReports.map((report) => (
+                    <tr key={report.id}>
+                      <Td>{formatDateTime(report.date)}</Td>
+                      <Td>{report.completedTasks}</Td>
+                      <Td>{report.totalTasks}</Td>
+                      <Td>
+                        <StatusBadge 
+                          status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
+                        >
+                          {Math.round((report.completedTasks / report.totalTasks) * 100)}%
+                        </StatusBadge>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <EmptyState>אין נתוני ביצוע משימות פתיחה בטווח התאריכים שנבחר.</EmptyState>
+            )}
+            
+            <SectionTitle style={{ marginTop: '2rem' }}>
+              <FaCheckCircle />
+              דוח ביצוע משימות סגירה
+            </SectionTitle>
+            
+            {closingReports.length > 0 ? (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>תאריך</Th>
+                    <Th>משימות שהושלמו</Th>
+                    <Th>סה"כ משימות</Th>
+                    <Th>אחוז השלמה</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {closingReports.map((report) => (
+                    <tr key={report.id}>
+                      <Td>{formatDateTime(report.date)}</Td>
+                      <Td>{report.completedTasks}</Td>
+                      <Td>{report.totalTasks}</Td>
+                      <Td>
+                        <StatusBadge 
+                          status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
+                        >
+                          {Math.round((report.completedTasks / report.totalTasks) * 100)}%
+                        </StatusBadge>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <EmptyState>אין נתוני ביצוע משימות סגירה בטווח התאריכים שנבחר.</EmptyState>
+            )}
+          </>
+        )}
+      </Card>
+      
+      <Card>
+        <CardHeader>
+          <CardTitle>דוח חוסרים</CardTitle>
+        </CardHeader>
+        
+        {loading ? (
+          <EmptyState>טוען נתונים...</EmptyState>
+        ) : shortageData.length > 0 ? (
+          <Table>
+            <thead>
+              <tr>
+                <Th>פריט</Th>
+                <Th>כמות חסרה</Th>
+                <Th>תאריך דיווח</Th>
+                <Th>סטטוס</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {shortageData.map((item) => (
+                <tr key={item.id}>
+                  <Td>
+                    {item.recentlyDeleted ? (
+                      <>
+                        <DeletedItemText>{item.itemName}</DeletedItemText>
+                        <DeletedDate>
+                          (טופל ב-{formatDate(item.deletedAt)})
+                        </DeletedDate>
+                      </>
+                    ) : (
+                      item.itemName
+                    )}
+                  </Td>
+                  <Td>{item.quantity}</Td>
+                  <Td>{formatDate(item.reportedAt)}</Td>
+                  <Td>
+                    <StatusBadge status={item.recentlyDeleted ? 'resolved' : item.status}>
+                      {item.recentlyDeleted ? 'טופל' : 
+                       item.status === 'resolved' ? 'טופל' : 'לא טופל'}
+                    </StatusBadge>
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        ) : (
+          <EmptyState>אין נתוני חוסרים בטווח התאריכים שנבחר.</EmptyState>
+        )}
+      </Card>
+    </ReportsContainer>
+  );
+};
+
+export default Reports;
