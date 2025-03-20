@@ -111,7 +111,7 @@ const Login = () => {
   return (
     <LoginContainer>
       <LoginForm onSubmit={handleSubmit}>
-        <Logo>מטבח הבר</Logo>
+        <Logo>מטבח דארמה</Logo>
         
         {error && <ErrorMessage>{error}</ErrorMessage>}
         
