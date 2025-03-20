@@ -213,7 +213,7 @@ import {
   };
   
   // שמירת דיווח השלמת משימות
-  export const saveTaskReport = async (reportData) => {
+export const saveTaskReport = async (reportData) => {
     const reportsRef = collection(db, 'taskReports');
     return await addDoc(reportsRef, {
       ...reportData,
@@ -221,3 +221,27 @@ import {
       createdAt: serverTimestamp()
     });
   };
+  
+  // קבלת דוחות משימות
+  export const getTaskReports = async (startDate, endDate) => {
+    // המרה לתאריכי firebase
+    const startTimestamp = Timestamp.fromDate(new Date(startDate));
+    const endTimestamp = Timestamp.fromDate(new Date(endDate));
+    
+    const reportsRef = collection(db, 'taskReports');
+    const q = query(
+      reportsRef, 
+      where('date', '>=', startTimestamp),
+      where('date', '<=', endTimestamp),
+      orderBy('date', 'desc')
+    );
+    
+    const snapshot = await getDocs(q);
+    
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      date: doc.data().date.toDate()
+    }));
+  };
+

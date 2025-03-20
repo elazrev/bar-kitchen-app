@@ -1,6 +1,7 @@
 import { createContext, useState, useEffect } from 'react';
 import { toast } from 'react-toastify';
 import { getShortages, saveTaskReport } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export const AppContext = createContext();
 
@@ -10,6 +11,7 @@ export const AppProvider = ({ children }) => {
   const [recipes, setRecipes] = useState([]);
   const [shortages, setShortages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth(); // קבלת פרטי המשתמש המחובר
   
   // טעינת נתוני חוסרים בטעינת האפליקציה
   useEffect(() => {
@@ -36,17 +38,23 @@ export const AppProvider = ({ children }) => {
         completedTasks,
         totalTasks,
         completionRate: Math.round((completedTasks / totalTasks) * 100),
-        completedAt: new Date().toISOString(),
-        tasksList: type === 'opening' ? openingTasks : closingTasks
+        userId: user?.uid,
+        userName: user?.displayName || user?.email || 'משתמש לא ידוע',
+        tasksList: type === 'opening' 
+          ? openingTasks.map(task => ({ id: task.id, title: task.title, completed: true })) 
+          : closingTasks.map(task => ({ id: task.id, title: task.title, completed: true })),
+        date: new Date().toISOString(),
       };
       
       // שמירת הדיווח בבסיס הנתונים
       await saveTaskReport(reportData);
       
       toast.success(`דיווח על ${completedTasks} מתוך ${totalTasks} משימות ${type === 'opening' ? 'פתיחה' : 'סגירה'} נשלח בהצלחה!`);
+      return true;
     } catch (err) {
       console.error('שגיאה בשליחת דיווח משימות:', err);
       toast.error('אירעה שגיאה בשליחת הדיווח');
+      return false;
     } finally {
       setLoading(false);
     }

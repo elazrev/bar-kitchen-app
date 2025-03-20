@@ -85,51 +85,45 @@ const TaskList = ({ tasks, type }) => {
   const { updateTaskStatus, sendTasksReport, loading } = useApp();
   const { isAdmin } = useAuth();
   const [isReported, setIsReported] = useState(false);
-  const [localTasks, setLocalTasks] = useState([]);
+  // שינוי כאן - נשתמש ב-state מקומי לשמירת מצב הסימון של המשימות
+  // זה חיוני כדי למנוע את אובדן הסימון בעת רינדור מחדש
+  const [checkedTasks, setCheckedTasks] = useState({});
   
-  // עדכון ה-localTasks בכל פעם שמשתנה tasks
+  // בעת טעינת הרכיב, נאתחל את מצב הסימון לפי המשימות שהתקבלו
   useEffect(() => {
-    if (tasks && tasks.length > 0) {
-      setLocalTasks(tasks.map(task => ({ ...task, completed: task.completed || false })));
-    }
-  }, [tasks]);
+    // נשמור את מצב הסימון הקיים אם יש
+    const initialCheckedState = {};
+    tasks.forEach(task => {
+      // אם כבר יש מצב שמור למשימה זו, נשתמש בו, אחרת נשתמש ב-completed מהמשימה
+      initialCheckedState[task.id] = checkedTasks[task.id] !== undefined ? 
+        checkedTasks[task.id] : (task.completed || false);
+    });
+    setCheckedTasks(initialCheckedState);
+  }, [tasks]); // נעדכן רק כאשר ה-tasks משתנים
   
   const handleCheckTask = (id, checked) => {
-    // עדכון מקומי של מצב המשימה
-    const updatedTasks = localTasks.map(task => 
-      task.id === id ? { ...task, completed: checked } : task
-    );
-    
-    setLocalTasks(updatedTasks);
+    // עדכון ה-state המקומי
+    setCheckedTasks(prev => ({
+      ...prev,
+      [id]: checked
+    }));
     
     // עדכון במצב האפליקציה הגלובלי
     updateTaskStatus(id, type, checked);
   };
   
   const handleReport = async () => {
-    // וידוא שכל המשימות בוצעו
-    if (localTasks.some(task => !task.completed)) {
+    // בדיקה שכל המשימות מסומנות כמושלמות
+    const allTasksCompleted = tasks.every(task => checkedTasks[task.id]);
+    
+    if (!allTasksCompleted) {
       toast.warn('יש להשלים את כל המשימות לפני הדיווח');
       return;
     }
     
     try {
-      const completedTasks = localTasks.filter(task => task.completed).length;
-      
-      // יצירת אובייקט דיווח מפורט יותר
-      const reportDetails = {
-        completedTasks,
-        totalTasks: localTasks.length,
-        tasks: localTasks.map(({ id, title, completed }) => ({ id, title, completed })),
-        timestamp: new Date().toISOString()
-      };
-      
-      // שליחת הדיווח למערכת
-      await sendTasksReport(type, completedTasks, localTasks.length);
-      
-      console.log(`דיווח על השלמת משימות ${type}:`, reportDetails);
-      
-      // עדכון ממשק המשתמש
+      const completedTasks = tasks.length;
+      await sendTasksReport(type, completedTasks, tasks.length);
       setIsReported(true);
       toast.success(`הדיווח על השלמת משימות ${type === 'opening' ? 'פתיחה' : 'סגירה'} נשלח בהצלחה!`);
     } catch (error) {
@@ -138,24 +132,17 @@ const TaskList = ({ tasks, type }) => {
     }
   };
   
-  // חישוב התקדמות
-  const completedCount = localTasks.filter(task => task.completed).length;
-  const progress = localTasks.length > 0 
-    ? Math.round((completedCount / localTasks.length) * 100) 
-    : 0;
-  
-  // אם אין משימות, מציג הודעה
-  if (!localTasks.length) {
-    return <div>אין משימות להצגה</div>;
-  }
+  // חישוב כמה משימות סומנו כמושלמות
+  const completedCount = tasks.filter(task => checkedTasks[task.id]).length;
+  const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
   
   return (
     <TaskListContainer>
-      {localTasks.map((task) => (
+      {tasks.map((task) => (
         <TaskItem key={task.id}>
           <TaskCheckbox
             type="checkbox"
-            checked={task.completed}
+            checked={checkedTasks[task.id] || false}
             onChange={(e) => handleCheckTask(task.id, e.target.checked)}
             disabled={isReported}
             id={`task-${task.id}`}
@@ -173,15 +160,15 @@ const TaskList = ({ tasks, type }) => {
       
       <ReportButtonContainer>
         <ProgressText>
-          הושלמו {completedCount} מתוך {localTasks.length} משימות ({progress}%)
+          הושלמו {completedCount} מתוך {tasks.length} משימות ({progress}%)
         </ProgressText>
         
         <ReportButton 
           onClick={handleReport} 
-          disabled={loading || isReported || completedCount < localTasks.length}
+          disabled={loading || isReported || completedCount < tasks.length}
         >
           <FaCheck />
-          {isReported ? 'דווח בהצלחה' : 'דווח על השלמת כל המשימות'}
+          {isReported ? 'דווח בהצלחה' : 'דווח על השלמת המשימות'}
         </ReportButton>
       </ReportButtonContainer>
     </TaskListContainer>

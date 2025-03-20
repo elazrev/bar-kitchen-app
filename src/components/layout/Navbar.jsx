@@ -74,6 +74,11 @@ const Navbar = () => {
     navigate('/shortage');
   };
 
+  // ספירת רק החוסרים הפעילים (שלא טופלו)
+  const activeShortagesCount = shortages.filter(
+    shortage => !shortage.resolved && !shortage.recentlyDeleted
+  ).length;
+
   return (
     <NavbarContainer>
       <UserInfo>
@@ -82,7 +87,7 @@ const Navbar = () => {
       <ActionButtons>
         <IconButton onClick={goToShortages}>
           <FaBell />
-          {shortages.length > 0 && <NotificationBadge>{shortages.length}</NotificationBadge>}
+          {activeShortagesCount > 0 && <NotificationBadge>{activeShortagesCount}</NotificationBadge>}
         </IconButton>
         <IconButton onClick={handleLogout}>
           <FaSignOutAlt />

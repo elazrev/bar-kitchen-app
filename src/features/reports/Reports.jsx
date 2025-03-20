@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { FaChartBar, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
-import { getShortages, getTaskCompletionReports } from '../../services/api';
+import { FaChartBar, FaCalendarAlt, FaCheckCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { getShortages, getTaskReports } from '../../services/api';
 
 const ReportsContainer = styled.div`
   padding: 2rem 0;
@@ -161,6 +161,23 @@ const ReportGrid = styled.div`
   margin-bottom: 2rem;
 `;
 
+const TaskReportDetails = styled.div`
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: var(--border-radius);
+  border-right: 4px solid var(--primary-color);
+`;
+
+const TaskItem = styled.div`
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--light-gray);
+  
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
 const Reports = () => {
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
@@ -173,10 +190,10 @@ const Reports = () => {
     return date.toISOString().split('T')[0];
   });
   
-  const [openingReports, setOpeningReports] = useState([]);
-  const [closingReports, setClosingReports] = useState([]);
+  const [taskReports, setTaskReports] = useState([]);
   const [shortageData, setShortageData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedReport, setSelectedReport] = useState(null);
 
   useEffect(() => {
     const fetchReportsData = async () => {
@@ -186,19 +203,14 @@ const Reports = () => {
         // נסה לקבל דוחות משימות מהשרת
         let reportsData = [];
         try {
-          reportsData = await getTaskCompletionReports(startDate, endDate);
+          reportsData = await getTaskReports(startDate, endDate);
         } catch (err) {
           console.warn('לא נמצאו דוחות משימות', err);
           // אם אין דוחות, נשתמש במערך ריק
           reportsData = [];
         }
         
-        // מיון הדוחות לפי סוגים
-        const openingData = reportsData.filter(report => report.type === 'opening');
-        const closingData = reportsData.filter(report => report.type === 'closing');
-        
-        setOpeningReports(openingData);
-        setClosingReports(closingData);
+        setTaskReports(reportsData);
         
         // קבלת נתוני חוסרים
         const shortagesResult = await getShortages();
@@ -235,11 +247,24 @@ const Reports = () => {
     return new Date(dateString).toLocaleDateString('he-IL', options);
   };
   
+  // מיון הדוחות לפי סוגים
+  const openingReports = taskReports.filter(report => report.type === 'opening');
+  const closingReports = taskReports.filter(report => report.type === 'closing');
+  
   // חישוב סיכומים
   const totalOpeningTasks = openingReports.reduce((sum, report) => sum + (report.completedTasks || 0), 0);
   const totalClosingTasks = closingReports.reduce((sum, report) => sum + (report.completedTasks || 0), 0);
   const activeShortages = shortageData.filter(item => item.status === 'unresolved' && !item.recentlyDeleted).length;
   const resolvedShortages = shortageData.filter(item => item.status === 'resolved' || item.recentlyDeleted).length;
+
+  // פונקציה לבחירת דוח לפרטים נוספים
+  const toggleReportDetails = (report) => {
+    if (selectedReport && selectedReport.id === report.id) {
+      setSelectedReport(null);
+    } else {
+      setSelectedReport(report);
+    }
+  };
 
   return (
     <ReportsContainer>
@@ -334,25 +359,54 @@ const Reports = () => {
                 <thead>
                   <tr>
                     <Th>תאריך</Th>
+                    <Th>מדווח</Th>
                     <Th>משימות שהושלמו</Th>
                     <Th>סה"כ משימות</Th>
                     <Th>אחוז השלמה</Th>
+                    <Th>פרטים</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {openingReports.map((report) => (
-                    <tr key={report.id}>
-                      <Td>{formatDateTime(report.date)}</Td>
-                      <Td>{report.completedTasks}</Td>
-                      <Td>{report.totalTasks}</Td>
-                      <Td>
-                        <StatusBadge 
-                          status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
-                        >
-                          {Math.round((report.completedTasks / report.totalTasks) * 100)}%
-                        </StatusBadge>
-                      </Td>
-                    </tr>
+                    <>
+                      <tr key={report.id} style={{cursor: 'pointer'}} onClick={() => toggleReportDetails(report)}>
+                        <Td>{formatDateTime(report.date)}</Td>
+                        <Td>{report.userName || 'לא ידוע'}</Td>
+                        <Td>{report.completedTasks}</Td>
+                        <Td>{report.totalTasks}</Td>
+                        <Td>
+                          <StatusBadge 
+                            status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
+                          >
+                            {report.completionRate || Math.round((report.completedTasks / report.totalTasks) * 100)}%
+                          </StatusBadge>
+                        </Td>
+                        <Td>
+                          <button className="btn btn-sm btn-secondary">
+                            {selectedReport && selectedReport.id === report.id ? 'הסתר' : 'הצג'}
+                          </button>
+                        </Td>
+                      </tr>
+                      {selectedReport && selectedReport.id === report.id && (
+                        <tr>
+                          <Td colSpan="6">
+                            <TaskReportDetails>
+                              <h4>משימות שהושלמו:</h4>
+                              {report.tasksList && report.tasksList.length > 0 ? (
+                                report.tasksList.map((task, index) => (
+                                  <TaskItem key={task.id || index}>
+                                    <FaClock style={{ marginLeft: '0.5rem', color: 'var(--primary-color)' }} />
+                                    {task.title}
+                                  </TaskItem>
+                                ))
+                              ) : (
+                                <p>אין פרטי משימות</p>
+                              )}
+                            </TaskReportDetails>
+                          </Td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </Table>
@@ -370,25 +424,54 @@ const Reports = () => {
                 <thead>
                   <tr>
                     <Th>תאריך</Th>
+                    <Th>מדווח</Th>
                     <Th>משימות שהושלמו</Th>
                     <Th>סה"כ משימות</Th>
                     <Th>אחוז השלמה</Th>
+                    <Th>פרטים</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {closingReports.map((report) => (
-                    <tr key={report.id}>
-                      <Td>{formatDateTime(report.date)}</Td>
-                      <Td>{report.completedTasks}</Td>
-                      <Td>{report.totalTasks}</Td>
-                      <Td>
-                        <StatusBadge 
-                          status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
-                        >
-                          {Math.round((report.completedTasks / report.totalTasks) * 100)}%
-                        </StatusBadge>
-                      </Td>
-                    </tr>
+                    <>
+                      <tr key={report.id} style={{cursor: 'pointer'}} onClick={() => toggleReportDetails(report)}>
+                        <Td>{formatDateTime(report.date)}</Td>
+                        <Td>{report.userName || 'לא ידוע'}</Td>
+                        <Td>{report.completedTasks}</Td>
+                        <Td>{report.totalTasks}</Td>
+                        <Td>
+                          <StatusBadge 
+                            status={report.completedTasks === report.totalTasks ? 'completed' : 'pending'}
+                          >
+                            {report.completionRate || Math.round((report.completedTasks / report.totalTasks) * 100)}%
+                          </StatusBadge>
+                        </Td>
+                        <Td>
+                          <button className="btn btn-sm btn-secondary">
+                            {selectedReport && selectedReport.id === report.id ? 'הסתר' : 'הצג'}
+                          </button>
+                        </Td>
+                      </tr>
+                      {selectedReport && selectedReport.id === report.id && (
+                        <tr>
+                          <Td colSpan="6">
+                            <TaskReportDetails>
+                              <h4>משימות שהושלמו:</h4>
+                              {report.tasksList && report.tasksList.length > 0 ? (
+                                report.tasksList.map((task, index) => (
+                                  <TaskItem key={task.id || index}>
+                                    <FaClock style={{ marginLeft: '0.5rem', color: 'var(--primary-color)' }} />
+                                    {task.title}
+                                  </TaskItem>
+                                ))
+                              ) : (
+                                <p>אין פרטי משימות</p>
+                              )}
+                            </TaskReportDetails>
+                          </Td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </Table>
