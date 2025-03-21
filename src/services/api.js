@@ -208,11 +208,15 @@ import {
     });
   };
   
-  // דוחות
-  export const getTaskReports = async (startDate, endDate) => {
+  // קבלת דוחות משימות
+export const getTaskReports = async (startDate, endDate) => {
     // המרה לתאריכי firebase
     const startTimestamp = Timestamp.fromDate(new Date(startDate));
-    const endTimestamp = Timestamp.fromDate(new Date(endDate));
+    
+    // נתקן את ה-endDate כך שיהיה בסוף היום (23:59:59)
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+    const endTimestamp = Timestamp.fromDate(endDateObj);
     
     const reportsRef = collection(db, 'taskReports');
     const q = query(
@@ -232,8 +236,20 @@ import {
   };
   
   // שמירת דיווח השלמת משימות
-  export const saveTaskReport = async (reportData) => {
+export const saveTaskReport = async (reportData) => {
     const reportsRef = collection(db, 'taskReports');
+    
+    // אם הדיווח מכיל תאריך כמחרוזת, המר אותו ל-Date
+    if (reportData.date && typeof reportData.date === 'string') {
+      const reportDate = new Date(reportData.date);
+      return await addDoc(reportsRef, {
+        ...reportData,
+        date: serverTimestamp(), // חשוב להשתמש ב-serverTimestamp כדי שיהיה עקבי
+        createdAt: serverTimestamp()
+      });
+    }
+    
+    // אם אין תאריך בדיווח, השתמש בזמן הנוכחי
     return await addDoc(reportsRef, {
       ...reportData,
       date: serverTimestamp(),
