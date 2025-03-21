@@ -546,7 +546,7 @@ const Reports = () => {
         {loading ? (
           <EmptyState>טוען נתונים...</EmptyState>
         ) : shortageData.length > 0 ? (
-        <TableContainer>
+        
           <Table>
             <thead>
               <tr>
@@ -583,7 +583,7 @@ const Reports = () => {
               ))}
             </tbody>
           </Table>
-          </TableContainer>
+          
         ) : (
           <EmptyState>אין נתוני חוסרים בטווח התאריכים שנבחר.</EmptyState>
         )}
