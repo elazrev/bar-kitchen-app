@@ -407,6 +407,7 @@ const Reports = () => {
             </SectionTitle>
             
             {openingReports.length > 0 ? (
+              <TableContainer>
               <Table>
                 <thead>
                   <tr>
@@ -462,6 +463,7 @@ const Reports = () => {
                   ))}
                 </tbody>
               </Table>
+              </TableContainer>
             ) : (
               <EmptyState>אין נתוני ביצוע משימות פתיחה בטווח התאריכים שנבחר.</EmptyState>
             )}
@@ -472,6 +474,7 @@ const Reports = () => {
             </SectionTitle>
             
             {closingReports.length > 0 ? (
+              <TableContainer>
               <Table>
                 <thead>
                   <tr>
@@ -527,6 +530,7 @@ const Reports = () => {
                   ))}
                 </tbody>
               </Table>
+              </TableContainer>
             ) : (
               <EmptyState>אין נתוני ביצוע משימות סגירה בטווח התאריכים שנבחר.</EmptyState>
             )}
@@ -542,6 +546,7 @@ const Reports = () => {
         {loading ? (
           <EmptyState>טוען נתונים...</EmptyState>
         ) : shortageData.length > 0 ? (
+        <TableContainer>
           <Table>
             <thead>
               <tr>
@@ -578,6 +583,7 @@ const Reports = () => {
               ))}
             </tbody>
           </Table>
+          </TableContainer>
         ) : (
           <EmptyState>אין נתוני חוסרים בטווח התאריכים שנבחר.</EmptyState>
         )}
