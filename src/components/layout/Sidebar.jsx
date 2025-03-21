@@ -7,7 +7,8 @@ import {
   FaClipboardList, 
   FaExclamationTriangle,
   FaChartBar,
-  FaTimes
+  FaTimes,
+  FaCopyright
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -24,6 +25,8 @@ const SidebarContainer = styled.aside`
   z-index: 1000;
   overflow-y: auto;
   transition: transform 0.3s ease;
+  display: flex;
+  flex-direction: column;
   
   @media (max-width: 768px) {
     transform: translateX(${props => props.open ? '0' : '100%'});
@@ -64,6 +67,7 @@ const Menu = styled.ul`
   list-style: none;
   padding: 0;
   margin: 0;
+  flex: 1; /* תופס את רוב המקום בסרגל */
 `;
 
 const MenuItem = styled.li`
@@ -100,8 +104,37 @@ const StyledNavLink = styled(NavLink)`
   }
 `;
 
+const Footer = styled.div`
+  padding: 1rem 1.5rem;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto; /* דחיפה לתחתית הסרגל */
+`;
+
+const CopyrightIcon = styled(FaCopyright)`
+  margin: 0 0.3rem;
+  font-size: 0.8rem;
+`;
+
+const EmailLink = styled.a`
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: none;
+  font-weight: 500;
+  
+  &:hover {
+    color: white;
+    text-decoration: underline;
+  }
+`;
+
 const Sidebar = ({ open, onClose }) => {
   const { isAdmin } = useAuth();
+  const currentYear = new Date().getFullYear();
   
   return (
     <SidebarContainer open={open}>
@@ -152,6 +185,14 @@ const Sidebar = ({ open, onClose }) => {
           </>
         )}
       </Menu>
+      
+    <Footer>
+        <p>
+            <span>כל הזכויות שמורות</span> <CopyrightIcon /> <span>{currentYear}</span> 
+            <br></br>
+            <EmailLink href="mailto:elaz.rev@gmail.com">elaz.rev</EmailLink>
+        </p>
+    </Footer>
     </SidebarContainer>
   );
 };
