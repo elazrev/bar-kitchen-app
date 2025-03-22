@@ -6,6 +6,7 @@ import {
     addDoc, 
     updateDoc, 
     deleteDoc,
+    setDoc,
     query,
     where,
     serverTimestamp,
@@ -13,9 +14,12 @@ import {
     Timestamp
   } from 'firebase/firestore';
   import { 
-    getAuth,
+    getAuth, 
     createUserWithEmailAndPassword,
-    deleteUser as firebaseDeleteUser
+    deleteUser as firebaseDeleteUser,
+    EmailAuthProvider,
+    reauthenticateWithCredential,
+    updatePassword
   } from 'firebase/auth';
   import { db } from './firebase';
   import { uploadImage } from './cloudinary';
@@ -262,8 +266,7 @@ export const saveTaskReport = async (reportData) => {
     });
   };
 
-  // קבלת כל המשתמשים
-export const getUsers = async () => {
+  export const getUsers = async () => {
     const usersRef = collection(db, 'users');
     const snapshot = await getDocs(usersRef);
     
@@ -274,37 +277,32 @@ export const getUsers = async () => {
   };
   
   // הוספת משתמש חדש
-  export const addUser = async (userData) => {
+  export const addNewUser = async (userData) => {
+    const auth = getAuth();
+    
     try {
-      const auth = getAuth();
-      
       // יצירת משתמש חדש ב-Firebase Authentication
-      const { email, phone } = userData;
-      const password = phone; // הסיסמה תהיה מספר הטלפון
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        userData.email,
+        userData.password // הסיסמה היא מספר הטלפון
+      );
       
-      // יצירת המשתמש
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = userCredential.user.uid;
+      const userId = userCredential.user.uid;
       
-      // שמירת הנתונים ב-Firestore
-      const userRef = doc(db, 'users', uid);
+      // הוספת המשתמש לאוסף users ב-Firestore
+      const userRef = doc(db, 'users', userId);
       await setDoc(userRef, {
-        email,
         displayName: userData.displayName,
-        phone,
-        role: 'staff', // תפקיד ברירת מחדל - עובד
+        email: userData.email,
+        phone: userData.phone,
+        role: userData.role || 'staff',
         createdAt: serverTimestamp()
       });
       
-      return {
-        id: uid,
-        email,
-        displayName: userData.displayName,
-        phone,
-        role: 'staff'
-      };
+      return userId;
     } catch (error) {
-      console.error('Error adding user:', error);
+      console.error('שגיאה ביצירת משתמש:', error);
       throw error;
     }
   };
@@ -312,33 +310,17 @@ export const getUsers = async () => {
   // מחיקת משתמש
   export const deleteUser = async (userId) => {
     try {
-      // מחיקה מ-Firestore
+      // מחיקת המשתמש מ-Firestore
       const userRef = doc(db, 'users', userId);
       await deleteDoc(userRef);
       
-      // במערכת אמיתית היינו גם מוחקים את המשתמש מ-Firebase Authentication
-      // אבל זה מצריך הרשאות מיוחדות ולכן רק מוחקים את הנתונים ב-Firestore
-  
-      return true;
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      throw error;
-    }
-  };
-  
-  // עדכון פרטי משתמש
-  export const updateUser = async (userId, userData) => {
-    try {
-      const userRef = doc(db, 'users', userId);
-      
-      await updateDoc(userRef, {
-        ...userData,
-        updatedAt: serverTimestamp()
-      });
+      // בסביבה אמיתית, נצטרך גם למחוק את המשתמש מ-Firebase Authentication
+      // אך מחיקה זו דורשת הרשאות מיוחדות או פעולה מנהלתית
+      // בדרך כלל כדאי לבצע את זה בצד השרת באמצעות Cloud Functions
       
       return true;
     } catch (error) {
-      console.error('Error updating user:', error);
+      console.error('שגיאה במחיקת משתמש:', error);
       throw error;
     }
   };
