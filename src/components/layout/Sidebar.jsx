@@ -12,7 +12,7 @@ import {
   FaCoins
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const SidebarContainer = styled.aside`
@@ -78,7 +78,6 @@ const MenuItem = styled.li`
   margin-bottom: 0.5rem;
 `;
 
-// הוספנו אירוע onClick כאן כדי לסגור את התפריט בלחיצה על קישור
 const StyledNavLink = styled(NavLink)`
   display: flex;
   align-items: center;
@@ -141,13 +140,25 @@ const Sidebar = ({ open = false, onClose = () => {} }) => {
   const { isAdmin } = useAuth();
   const currentYear = new Date().getFullYear();
   const location = useLocation();
+  const prevPathRef = useRef(location.pathname);
   
-  // סגירת התפריט כאשר הנתיב משתנה (כלומר, כאשר נבחר קישור)
+  // סגירת התפריט רק כאשר הנתיב משתנה ולא בטעינה הראשונית
   useEffect(() => {
-    if (open) {
+    // אם זה לא הרינדור הראשון וגם יש שינוי נתיב וגם התפריט פתוח
+    if (prevPathRef.current !== location.pathname && open) {
       onClose();
     }
+    
+    // עדכון הנתיב הקודם
+    prevPathRef.current = location.pathname;
   }, [location.pathname, onClose, open]);
+  
+  // אפשרות חלופית - הוספת האירוע ישירות לכל קישור
+  const handleNavLinkClick = () => {
+    if (window.innerWidth <= 768) { // בדיקה אם במצב מובייל
+      onClose();
+    }
+  };
   
   return (
     <SidebarContainer open={open}>
@@ -157,25 +168,25 @@ const Sidebar = ({ open = false, onClose = () => {} }) => {
       <Logo>מטבח הבר</Logo>
       <Menu>
         <MenuItem>
-          <StyledNavLink to="/opening">
+          <StyledNavLink to="/opening" onClick={handleNavLinkClick}>
             <FaSun />
             נהלי פתיחה
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/recipes">
+          <StyledNavLink to="/recipes" onClick={handleNavLinkClick}>
             <FaBook />
             מתכונים
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/closing">
+          <StyledNavLink to="/closing" onClick={handleNavLinkClick}>
             <FaMoon />
             נהלי סגירה
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/shortage">
+          <StyledNavLink to="/shortage" onClick={handleNavLinkClick}>
             <FaExclamationTriangle />
             דיווח חוסרים
           </StyledNavLink>
@@ -184,19 +195,19 @@ const Sidebar = ({ open = false, onClose = () => {} }) => {
         {isAdmin() && (
           <>
             <MenuItem>
-              <StyledNavLink to="/admin">
+              <StyledNavLink to="/admin" onClick={handleNavLinkClick}>
                 <FaClipboardList />
                 ניהול תוכן
               </StyledNavLink>
             </MenuItem>
             <MenuItem>
-              <StyledNavLink to="/reports">
+              <StyledNavLink to="/reports" onClick={handleNavLinkClick}>
                 <FaChartBar />
                 דוחות
               </StyledNavLink>
             </MenuItem>
             <MenuItem>
-              <StyledNavLink to="/tips">
+              <StyledNavLink to="/tips" onClick={handleNavLinkClick}>
                 <FaCoins />
                 חישוב טיפים
               </StyledNavLink>
