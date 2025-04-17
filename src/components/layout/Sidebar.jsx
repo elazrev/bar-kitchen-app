@@ -9,14 +9,16 @@ import {
   FaChartBar,
   FaTimes,
   FaCopyright,
-  FaCoins // הוספנו את האייקון החסר
+  FaCoins
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const SidebarContainer = styled.aside`
   background-color: var(--primary-color);
   color: white;
-  width: 240px; /* ערך ברירת מחדל במקרה שהמשתנה לא מוגדר */
+  width: 240px;
   width: var(--sidebar-width, 240px);
   height: 100vh;
   padding: 1.5rem 0;
@@ -69,13 +71,14 @@ const Menu = styled.ul`
   list-style: none;
   padding: 0;
   margin: 0;
-  flex: 1; /* תופס את רוב המקום בסרגל */
+  flex: 1;
 `;
 
 const MenuItem = styled.li`
   margin-bottom: 0.5rem;
 `;
 
+// הוספנו אירוע onClick כאן כדי לסגור את התפריט בלחיצה על קישור
 const StyledNavLink = styled(NavLink)`
   display: flex;
   align-items: center;
@@ -102,7 +105,7 @@ const StyledNavLink = styled(NavLink)`
   }
   
   @media (max-width: 768px) {
-    padding: 1rem 1.5rem; /* פדינג גדול יותר במובייל לנוחות לחיצה */
+    padding: 1rem 1.5rem;
   }
 `;
 
@@ -115,7 +118,7 @@ const Footer = styled.div`
   align-items: center;
   justify-content: center;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: auto; /* דחיפה לתחתית הסרגל */
+  margin-top: auto;
 `;
 
 const CopyrightIcon = styled(FaCopyright)`
@@ -134,10 +137,17 @@ const EmailLink = styled.a`
   }
 `;
 
-// נוסיף ערכי ברירת מחדל לפרופס כדי למנוע שגיאות
 const Sidebar = ({ open = false, onClose = () => {} }) => {
   const { isAdmin } = useAuth();
   const currentYear = new Date().getFullYear();
+  const location = useLocation();
+  
+  // סגירת התפריט כאשר הנתיב משתנה (כלומר, כאשר נבחר קישור)
+  useEffect(() => {
+    if (open) {
+      onClose();
+    }
+  }, [location.pathname, onClose, open]);
   
   return (
     <SidebarContainer open={open}>
