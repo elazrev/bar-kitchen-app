@@ -12,6 +12,7 @@ import Reports from './features/reports/Reports';
 import Shortage from './features/reports/Shortage';
 import NotFound from './components/shared/NotFound';
 import Dashboard from './features/admin/Dashboard';
+import TipsCalculator from './features/admin/TipsCalculator'; // קומפוננטה חדשה לחישוב טיפים
 
 function App() {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ function App() {
           <Route element={<AdminRoute />}>
             <Route path="/admin" element={<Dashboard />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/tips" element={<TipsCalculator />} /> {/* נתיב חדש לחישוב טיפים */}
           </Route>
         </Route>
       </Route>

@@ -8,14 +8,16 @@ import {
   FaExclamationTriangle,
   FaChartBar,
   FaTimes,
-  FaCopyright
+  FaCopyright,
+  FaCoins // הוספנו את האייקון החסר
 } from 'react-icons/fa';
 import { useAuth } from '../../hooks/useAuth';
 
 const SidebarContainer = styled.aside`
   background-color: var(--primary-color);
   color: white;
-  width: var(--sidebar-width);
+  width: 240px; /* ערך ברירת מחדל במקרה שהמשתנה לא מוגדר */
+  width: var(--sidebar-width, 240px);
   height: 100vh;
   padding: 1.5rem 0;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
@@ -30,7 +32,7 @@ const SidebarContainer = styled.aside`
   
   @media (max-width: 768px) {
     transform: translateX(${props => props.open ? '0' : '100%'});
-    width: var(--sidebar-width-mobile);
+    width: var(--sidebar-width-mobile, 80%);
   }
 `;
 
@@ -132,7 +134,8 @@ const EmailLink = styled.a`
   }
 `;
 
-const Sidebar = ({ open, onClose }) => {
+// נוסיף ערכי ברירת מחדל לפרופס כדי למנוע שגיאות
+const Sidebar = ({ open = false, onClose = () => {} }) => {
   const { isAdmin } = useAuth();
   const currentYear = new Date().getFullYear();
   
@@ -144,25 +147,25 @@ const Sidebar = ({ open, onClose }) => {
       <Logo>מטבח הבר</Logo>
       <Menu>
         <MenuItem>
-          <StyledNavLink to="/opening" onClick={onClose}>
+          <StyledNavLink to="/opening">
             <FaSun />
             נהלי פתיחה
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/recipes" onClick={onClose}>
+          <StyledNavLink to="/recipes">
             <FaBook />
             מתכונים
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/closing" onClick={onClose}>
+          <StyledNavLink to="/closing">
             <FaMoon />
             נהלי סגירה
           </StyledNavLink>
         </MenuItem>
         <MenuItem>
-          <StyledNavLink to="/shortage" onClick={onClose}>
+          <StyledNavLink to="/shortage">
             <FaExclamationTriangle />
             דיווח חוסרים
           </StyledNavLink>
@@ -171,20 +174,26 @@ const Sidebar = ({ open, onClose }) => {
         {isAdmin() && (
           <>
             <MenuItem>
-              <StyledNavLink to="/admin" onClick={onClose}>
+              <StyledNavLink to="/admin">
                 <FaClipboardList />
                 ניהול תוכן
               </StyledNavLink>
             </MenuItem>
             <MenuItem>
-              <StyledNavLink to="/reports" onClick={onClose}>
+              <StyledNavLink to="/reports">
                 <FaChartBar />
                 דוחות
               </StyledNavLink>
             </MenuItem>
+            <MenuItem>
+              <StyledNavLink to="/tips">
+                <FaCoins />
+                חישוב טיפים
+              </StyledNavLink>
+            </MenuItem>
           </>
         )}
-      </Menu>
+      </Menu> 
       
     <Footer>
         <p>
