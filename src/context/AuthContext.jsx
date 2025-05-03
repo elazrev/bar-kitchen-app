@@ -7,6 +7,7 @@ import {
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { app } from '../services/firebase';
+import { hasPermission, PERMISSIONS } from '../services/api';
 
 export const AuthContext = createContext();
 
@@ -31,6 +32,7 @@ export const AuthProvider = ({ children }) => {
               uid: user.uid,
               email: user.email,
               displayName: userData.displayName || user.email,
+              role: userData.role, // וודא שהתפקיד נשמר
               ...userData
             });
             setUserRole(userData.role || 'staff');
@@ -40,6 +42,7 @@ export const AuthProvider = ({ children }) => {
               uid: user.uid,
               email: user.email,
               displayName: user.email,
+              role: 'staff'
             });
             setUserRole('staff');
           }
@@ -85,6 +88,40 @@ export const AuthProvider = ({ children }) => {
     return userRole === 'admin' || userRole === 'manager';
   };
 
+  // פונקציה חדשה לבדיקת הרשאות
+  const hasUserPermission = (permission) => {
+    if (!user || !user.role) return false;
+    try {
+      return hasPermission(user.role, permission);
+    } catch (error) {
+      console.error('Error checking permission:', error);
+      return false;
+    }
+  };
+
+  // פונקציה חדשה לבדיקה אם למשתמש יש גישה לניהול טיפים
+  const canAccessTipsManagement = () => {
+    try {
+      return hasUserPermission(PERMISSIONS.MANAGE_TIPS) || 
+             hasUserPermission(PERMISSIONS.VIEW_TIP_REPORTS) || 
+             hasUserPermission(PERMISSIONS.MANAGE_EMPLOYEES);
+    } catch (error) {
+      console.error('Error checking tips management access:', error);
+      return false;
+    }
+  };
+
+  // פונקציה חדשה לבדיקה אם למשתמש יש גישה לתוכן מטבח
+  const canAccessKitchenContent = () => {
+    try {
+      return hasUserPermission(PERMISSIONS.VIEW_RECIPES) || 
+             hasUserPermission(PERMISSIONS.MANAGE_KITCHEN);
+    } catch (error) {
+      console.error('Error checking kitchen content access:', error);
+      return false;
+    }
+  };
+
   const value = {
     user,
     userRole,
@@ -92,9 +129,11 @@ export const AuthProvider = ({ children }) => {
     error,
     login,
     logout,
-    isAdmin
+    isAdmin,
+    hasUserPermission,
+    canAccessTipsManagement,
+    canAccessKitchenContent
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-

@@ -12,6 +12,8 @@
   "dependencies": {
     "cloudinary": "^2.6.0",
     "firebase": "^10.7.0",
+    "jspdf": "^3.0.1",
+    "jspdf-autotable": "^5.0.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.49.0",

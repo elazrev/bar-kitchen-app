@@ -1,3 +1,4 @@
+// src/components/layout/Sidebar.jsx
 import { NavLink } from 'react-router-dom';
 import styled from 'styled-components';
 import { 
@@ -14,6 +15,7 @@ import {
 import { useAuth } from '../../hooks/useAuth';
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { PERMISSIONS } from '../../services/api';
 
 const SidebarContainer = styled.aside`
   background-color: var(--primary-color);
@@ -137,25 +139,20 @@ const EmailLink = styled.a`
 `;
 
 const Sidebar = ({ open = false, onClose = () => {} }) => {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user, hasUserPermission, canAccessKitchenContent, canAccessTipsManagement } = useAuth();
   const currentYear = new Date().getFullYear();
   const location = useLocation();
   const prevPathRef = useRef(location.pathname);
   
-  // סגירת התפריט רק כאשר הנתיב משתנה ולא בטעינה הראשונית
   useEffect(() => {
-    // אם זה לא הרינדור הראשון וגם יש שינוי נתיב וגם התפריט פתוח
     if (prevPathRef.current !== location.pathname && open) {
       onClose();
     }
-    
-    // עדכון הנתיב הקודם
     prevPathRef.current = location.pathname;
   }, [location.pathname, onClose, open]);
   
-  // אפשרות חלופית - הוספת האירוע ישירות לכל קישור
   const handleNavLinkClick = () => {
-    if (window.innerWidth <= 768) { // בדיקה אם במצב מובייל
+    if (window.innerWidth <= 768) {
       onClose();
     }
   };
@@ -167,62 +164,81 @@ const Sidebar = ({ open = false, onClose = () => {} }) => {
       </CloseButton>
       <Logo>מטבח הבר</Logo>
       <Menu>
-        <MenuItem>
-          <StyledNavLink to="/opening" onClick={handleNavLinkClick}>
-            <FaSun />
-            נהלי פתיחה
-          </StyledNavLink>
-        </MenuItem>
-        <MenuItem>
-          <StyledNavLink to="/recipes" onClick={handleNavLinkClick}>
-            <FaBook />
-            מתכונים
-          </StyledNavLink>
-        </MenuItem>
-        <MenuItem>
-          <StyledNavLink to="/closing" onClick={handleNavLinkClick}>
-            <FaMoon />
-            נהלי סגירה
-          </StyledNavLink>
-        </MenuItem>
-        <MenuItem>
-          <StyledNavLink to="/shortage" onClick={handleNavLinkClick}>
-            <FaExclamationTriangle />
-            דיווח חוסרים
-          </StyledNavLink>
-        </MenuItem>
-        
-        {isAdmin() && (
+        {/* הצג תפריטי מטבח רק למי שיש הרשאות מטבח */}
+        {canAccessKitchenContent() && (
           <>
             <MenuItem>
-              <StyledNavLink to="/admin" onClick={handleNavLinkClick}>
-                <FaClipboardList />
-                ניהול תוכן
+              <StyledNavLink to="/opening" onClick={handleNavLinkClick}>
+                <FaSun />
+                נהלי פתיחה
               </StyledNavLink>
             </MenuItem>
             <MenuItem>
-              <StyledNavLink to="/reports" onClick={handleNavLinkClick}>
-                <FaChartBar />
-                דוחות
+              <StyledNavLink to="/recipes" onClick={handleNavLinkClick}>
+                <FaBook />
+                מתכונים
               </StyledNavLink>
             </MenuItem>
             <MenuItem>
-              <StyledNavLink to="/tips" onClick={handleNavLinkClick}>
-                <FaCoins />
-                חישוב טיפים
+              <StyledNavLink to="/closing" onClick={handleNavLinkClick}>
+                <FaMoon />
+                נהלי סגירה
+              </StyledNavLink>
+            </MenuItem>
+            <MenuItem>
+              <StyledNavLink to="/shortage" onClick={handleNavLinkClick}>
+                <FaExclamationTriangle />
+                דיווח חוסרים
               </StyledNavLink>
             </MenuItem>
           </>
         )}
+        
+        {/* תפריט ניהול תוכן - רק למי שיש הרשאות ניהול */}
+        {(hasUserPermission(PERMISSIONS.MANAGE_USERS) || hasUserPermission(PERMISSIONS.MANAGE_KITCHEN)) && (
+          <MenuItem>
+            <StyledNavLink 
+              to="/admin" 
+              onClick={handleNavLinkClick}
+              end
+            >
+              <FaClipboardList />
+              ניהול תוכן
+            </StyledNavLink>
+          </MenuItem>
+        )}
+        
+        {/* דוחות - למנהלים או למנהלי טיפים */}
+        {(hasUserPermission(PERMISSIONS.MANAGE_USERS)) && (
+          <MenuItem>
+            <StyledNavLink to="/reports" onClick={handleNavLinkClick}>
+              <FaChartBar />
+              דוחות
+            </StyledNavLink>
+          </MenuItem>
+        )}
+        
+        {/* ניהול טיפים - רק למי שיש הרשאות לטיפים */}
+        {canAccessTipsManagement() && (
+          <MenuItem>
+            <StyledNavLink 
+              to="/admin/tips" 
+              onClick={handleNavLinkClick}
+            >
+              <FaCoins />
+              חישוב טיפים
+            </StyledNavLink>
+          </MenuItem>
+        )}
       </Menu> 
       
-    <Footer>
+      <Footer>
         <p>
-            <span>כל הזכויות שמורות</span> <CopyrightIcon /> <span>{currentYear}</span> 
-            <br></br>
-            <EmailLink href="mailto:elaz.rev@gmail.com">elaz.rev</EmailLink>
+          <span>כל הזכויות שמורות</span> <CopyrightIcon /> <span>{currentYear}</span> 
+          <br />
+          <EmailLink href="mailto:elaz.rev@gmail.com">elaz.rev</EmailLink>
         </p>
-    </Footer>
+      </Footer>
     </SidebarContainer>
   );
 };

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { FaUserPlus, FaUser, FaPhone, FaEnvelope, FaTrash, FaSave, FaTimes } from 'react-icons/fa';
+import { FaUserPlus, FaUser, FaPhone, FaEnvelope, FaTrash, FaSave, FaTimes, FaEdit } from 'react-icons/fa';
 import { toast } from 'react-toastify';
-import { getUsers, addNewUser, deleteUser } from '../../services/api';
+import { getUsers, addNewUser, deleteUser, updateUser } from '../../services/api';
 
 const UsersContainer = styled.div`
   background-color: white;
@@ -259,16 +259,54 @@ const EmptyState = styled.div`
   text-align: center;
   padding: 2rem;
   color: #666;
+  
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: 1px solid var(--light-gray);
+  border-radius: var(--border-radius);
+  
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+  }
+`;
+
+const EditButton = styled.button`
+  position: absolute;
+  top: 1rem;
+  left: 3rem;
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 1rem;
+  
+  &:hover {
+    color: #1e3a6a;
+  }
+`;
+
+const EditForm = styled.div`
+  padding: 1rem;
+  border-top: 1px solid var(--light-gray);
+  margin-top: 1rem;
 `;
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
   const [newUser, setNewUser] = useState({
     displayName: '',
     email: '',
-    phone: ''
+    phone: '',
+    role: 'staff'
   });
 
   useEffect(() => {
@@ -289,10 +327,12 @@ const AdminUsers = () => {
 
   const handleAddNewClick = () => {
     setIsAddingNew(true);
+    setEditingUserId(null);
     setNewUser({
       displayName: '',
       email: '',
-      phone: ''
+      phone: '',
+      role: 'staff'
     });
   };
 
@@ -303,6 +343,14 @@ const AdminUsers = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setNewUser(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleEditInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditingUser(prev => ({
       ...prev,
       [name]: value
     }));
@@ -324,7 +372,6 @@ const AdminUsers = () => {
       return false;
     }
     
-    // בדיקה אם המשתמש כבר קיים
     if (users.some(user => user.email === newUser.email)) {
       toast.error('משתמש עם כתובת אימייל זו כבר קיים במערכת');
       return false;
@@ -343,13 +390,11 @@ const AdminUsers = () => {
       
       const newUserData = {
         ...newUser,
-        role: 'staff', // כל המשתמשים החדשים הם עובדים רגילים
-        password: newUser.phone // הסיסמה הראשונית היא מספר הטלפון
+        password: newUser.phone
       };
       
       await addNewUser(newUserData);
       
-      // רענון רשימת המשתמשים
       const updatedUsers = await getUsers();
       setUsers(updatedUsers);
       
@@ -372,7 +417,6 @@ const AdminUsers = () => {
       setLoading(true);
       await deleteUser(userId);
       
-      // עדכון רשימת המשתמשים המקומית
       setUsers(users.filter(user => user.id !== userId));
       
       toast.success(`המשתמש ${userName} נמחק בהצלחה`);
@@ -381,6 +425,52 @@ const AdminUsers = () => {
       console.error('שגיאה במחיקת משתמש:', err);
       toast.error('אירעה שגיאה במחיקת המשתמש');
       setLoading(false);
+    }
+  };
+
+  const handleEditUser = (user) => {
+    setEditingUserId(user.id);
+    setEditingUser({ ...user });
+    setIsAddingNew(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUserId(null);
+    setEditingUser(null);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      setLoading(true);
+      
+      await updateUser(editingUserId, {
+        role: editingUser.role
+      });
+      
+      const updatedUsers = await getUsers();
+      setUsers(updatedUsers);
+      
+      toast.success('התפקיד עודכן בהצלחה');
+      setEditingUserId(null);
+      setEditingUser(null);
+      setLoading(false);
+    } catch (err) {
+      console.error('שגיאה בעדכון משתמש:', err);
+      toast.error('אירעה שגיאה בעדכון המשתמש');
+      setLoading(false);
+    }
+  };
+
+  const getRoleDisplay = (role) => {
+    switch (role) {
+      case 'admin':
+        return 'מנהל';
+      case 'tips_manager':
+        return 'מנהל טיפים';
+      case 'staff':
+        return 'עובד מטבח';
+      default:
+        return role;
     }
   };
 
@@ -435,6 +525,19 @@ const AdminUsers = () => {
                 placeholder="0501234567"
               />
             </FormGroup>
+            <FormGroup>
+              <Label htmlFor="role">תפקיד</Label>
+              <Select
+                id="role"
+                name="role"
+                value={newUser.role}
+                onChange={handleInputChange}
+              >
+                <option value="staff">עובד מטבח</option>
+                <option value="tips_manager">מנהל טיפים</option>
+                <option value="admin">מנהל</option>
+              </Select>
+            </FormGroup>
           </FormGrid>
           <FormActions>
             <CancelButton onClick={handleCancel}>
@@ -461,7 +564,7 @@ const AdminUsers = () => {
                 </UserIcon>
                 <UserInfo>
                   <UserName>{user.displayName}</UserName>
-                  <UserRole>{user.role === 'admin' ? 'מנהל' : 'עובד מטבח'}</UserRole>
+                  <UserRole>{getRoleDisplay(user.role)}</UserRole>
                 </UserInfo>
               </UserHeader>
               <UserDetail>
@@ -475,12 +578,47 @@ const AdminUsers = () => {
                 </UserDetail>
               )}
               {user.role !== 'admin' && (
-                <DeleteButton 
-                  onClick={() => handleDeleteUser(user.id, user.displayName)}
-                  title="מחק משתמש"
-                >
-                  <FaTrash />
-                </DeleteButton>
+                <>
+                  <EditButton 
+                    onClick={() => handleEditUser(user)}
+                    title="ערוך תפקיד"
+                  >
+                    <FaEdit />
+                  </EditButton>
+                  <DeleteButton 
+                    onClick={() => handleDeleteUser(user.id, user.displayName)}
+                    title="מחק משתמש"
+                  >
+                    <FaTrash />
+                  </DeleteButton>
+                </>
+              )}
+              
+              {editingUserId === user.id && (
+                <EditForm>
+                  <FormGroup>
+                    <Label>תפקיד:</Label>
+                    <Select
+                      name="role"
+                      value={editingUser.role}
+                      onChange={handleEditInputChange}
+                    >
+                      <option value="staff">עובד מטבח</option>
+                      <option value="tips_manager">מנהל טיפים</option>
+                      <option value="admin">מנהל</option>
+                    </Select>
+                  </FormGroup>
+                  <FormActions>
+                    <CancelButton onClick={handleCancelEdit}>
+                      <FaTimes />
+                      ביטול
+                    </CancelButton>
+                    <SaveButton onClick={handleSaveEdit} disabled={loading}>
+                      <FaSave />
+                      {loading ? 'שומר...' : 'שמור'}
+                    </SaveButton>
+                  </FormActions>
+                </EditForm>
               )}
             </UserCard>
           ))}

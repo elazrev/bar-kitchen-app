@@ -324,3 +324,295 @@ export const saveTaskReport = async (reportData) => {
       throw error;
     }
   };
+ 
+  export const ROLES = {
+    ADMIN: 'admin',
+    TIPS_MANAGER: 'tips_manager',
+    STAFF: 'staff'
+  };
+  
+  export const PERMISSIONS = {
+    VIEW_RECIPES: 'view_recipes',
+    MANAGE_KITCHEN: 'manage_kitchen',
+    MANAGE_USERS: 'manage_users',
+    MANAGE_TIPS: 'manage_tips',
+    VIEW_TIP_REPORTS: 'view_tip_reports',
+    MANAGE_EMPLOYEES: 'manage_employees'
+  };
+  
+  export const ROLE_PERMISSIONS = {
+    [ROLES.ADMIN]: Object.values(PERMISSIONS),
+    [ROLES.TIPS_MANAGER]: [
+      PERMISSIONS.MANAGE_TIPS,
+      PERMISSIONS.VIEW_TIP_REPORTS,
+      PERMISSIONS.MANAGE_EMPLOYEES
+    ],
+    [ROLES.STAFF]: [
+      PERMISSIONS.VIEW_RECIPES,
+      PERMISSIONS.MANAGE_KITCHEN
+    ]
+  };
+
+  export const updateUser = async (userId, updateData) => {
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        ...updateData,
+        updatedAt: serverTimestamp()
+      });
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
+    }
+  };
+  
+  // פונקציה לבדיקת הרשאות
+  export const hasPermission = (userRole, requiredPermission) => {
+    const userPermissions = ROLE_PERMISSIONS[userRole] || [];
+    return userPermissions.includes(requiredPermission);
+  };
+  
+  // ניהול עובדים לטיפים
+  export const tipEmployeeAPI = {
+    async addEmployee(employeeData) {
+      try {
+        const employeeRef = await addDoc(collection(db, 'tip_employees'), {
+          ...employeeData,
+          isActive: true,
+          createdAt: serverTimestamp()
+        });
+        return { id: employeeRef.id, ...employeeData };
+      } catch (error) {
+        console.error('Error adding employee:', error);
+        throw error;
+      }
+    },
+  
+    async updateEmployee(employeeId, employeeData) {
+      try {
+        const employeeRef = doc(db, 'tip_employees', employeeId);
+        await updateDoc(employeeRef, {
+          ...employeeData,
+          updatedAt: serverTimestamp()
+        });
+        return { id: employeeId, ...employeeData };
+      } catch (error) {
+        console.error('Error updating employee:', error);
+        throw error;
+      }
+    },
+  
+    async deactivateEmployee(employeeId) {
+      try {
+        const employeeRef = doc(db, 'tip_employees', employeeId);
+        await updateDoc(employeeRef, {
+          isActive: false,
+          deactivatedAt: serverTimestamp()
+        });
+        return employeeId;
+      } catch (error) {
+        console.error('Error deactivating employee:', error);
+        throw error;
+      }
+    },
+  
+    async getActiveEmployees() {
+      try {
+        console.log('Fetching active employees...');
+        
+        // פתרון: מביאים את כל העובדים ומסננים בצד הלקוח
+        const employeesRef = collection(db, 'tip_employees');
+        const snapshot = await getDocs(employeesRef);
+        
+        if (snapshot.empty) {
+          console.log('No employees found in database');
+          return [];
+        }
+        
+        const employees = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          employees.push({
+            id: doc.id,
+            ...data
+          });
+        });
+        
+        // סינון עובדים פעילים בלבד
+        const activeEmployees = employees.filter(emp => {
+          // אם השדה isActive לא קיים, נחשיב את העובד כפעיל
+          return emp.isActive === true || emp.isActive === undefined;
+        });
+        
+        // מיון לפי שם
+        activeEmployees.sort((a, b) => {
+          const nameA = a.name || '';
+          const nameB = b.name || '';
+          return nameA.localeCompare(nameB);
+        });
+        
+        console.log(`Found ${activeEmployees.length} active employees out of ${employees.length} total`);
+        return activeEmployees;
+      } catch (error) {
+        console.error('Error fetching active employees:', error);
+        throw error;
+      }
+    },
+  
+    async getAllEmployees() {
+      try {
+        console.log('Fetching all employees...');
+        
+        const employeesRef = collection(db, 'tip_employees');
+        const snapshot = await getDocs(employeesRef);
+        
+        if (snapshot.empty) {
+          console.log('No employees found in database');
+          return [];
+        }
+        
+        const employees = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          employees.push({
+            id: doc.id,
+            ...data
+          });
+        });
+        
+        // מיון לפי שם
+        employees.sort((a, b) => {
+          const nameA = a.name || '';
+          const nameB = b.name || '';
+          return nameA.localeCompare(nameB);
+        });
+        
+        console.log(`Found ${employees.length} total employees`);
+        return employees;
+      } catch (error) {
+        console.error('Error fetching all employees:', error);
+        throw error;
+      }
+    }
+  };
+  
+  // ניהול משמרות וטיפים
+  export const tipShiftAPI = {
+    async saveShift(shiftData) {
+      try {
+        const shiftRef = await addDoc(collection(db, 'tip_shifts'), {
+          date: shiftData.date,
+          totalTips: shiftData.totalTips,
+          employees: shiftData.employees,
+          leftover: shiftData.leftover,
+          createdBy: shiftData.createdBy,
+          createdAt: serverTimestamp()
+        });
+        return { id: shiftRef.id, ...shiftData };
+      } catch (error) {
+        console.error('Error saving shift:', error);
+        throw error;
+      }
+    },
+  
+    async getShiftsByDateRange(startDate, endDate) {
+      try {
+        // במקום להשתמש בשאילתא עם where + orderBy, נביא את כל המסמכים ונסנן בקוד
+        const shiftsRef = collection(db, 'tip_shifts');
+        const snapshot = await getDocs(shiftsRef);
+        
+        const allShifts = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        // סינון ומיון בקוד
+        const filteredShifts = allShifts
+          .filter(shift => {
+            const shiftDate = shift.date.toDate();
+            return shiftDate >= startDate && shiftDate <= endDate;
+          })
+          .sort((a, b) => b.date.toDate() - a.date.toDate()); // מיון לפי תאריך יורד
+        
+        return filteredShifts;
+      } catch (error) {
+        console.error('Error fetching shifts by date range:', error);
+        throw error;
+      }
+    },
+  
+    async getEmployeeShifts(employeeId, startDate, endDate) {
+      try {
+        const shifts = await this.getShiftsByDateRange(startDate, endDate);
+        return shifts.filter(shift => 
+          shift.employees.some(emp => emp.employeeId === employeeId)
+        );
+      } catch (error) {
+        console.error('Error fetching employee shifts:', error);
+        throw error;
+      }
+    },
+  
+    async getMonthlyReport(year, month) {
+      try {
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+        
+        const shifts = await this.getShiftsByDateRange(startDate, endDate);
+        
+        const employeeSummary = {};
+        let totalTips = 0;
+        
+        shifts.forEach(shift => {
+          shift.employees.forEach(emp => {
+            if (!employeeSummary[emp.employeeId]) {
+              employeeSummary[emp.employeeId] = {
+                employeeId: emp.employeeId,
+                name: emp.name,
+                totalHours: 0,
+                totalTips: 0,
+                shiftsCount: 0
+              };
+            }
+            
+            employeeSummary[emp.employeeId].totalHours += parseFloat(emp.hours) || 0;
+            employeeSummary[emp.employeeId].totalTips += parseFloat(emp.tipAmount) || 0;
+            employeeSummary[emp.employeeId].shiftsCount += 1;
+          });
+          
+          totalTips += parseFloat(shift.totalTips) || 0;
+        });
+        
+        return {
+          period: { year, month },
+          shifts: shifts.length,
+          totalTips,
+          employeeSummary: Object.values(employeeSummary),
+          leftoverTotal: shifts.reduce((sum, shift) => sum + (parseFloat(shift.leftover) || 0), 0)
+        };
+      } catch (error) {
+        console.error('Error generating monthly report:', error);
+        throw error;
+      }
+    },
+
+    async getShiftById(shiftId) {
+    try {
+      const shiftDoc = await getDoc(doc(db, 'tip_shifts', shiftId));
+      
+      if (!shiftDoc.exists()) {
+        throw new Error('Shift not found');
+      }
+      
+      return {
+        id: shiftDoc.id,
+        ...shiftDoc.data()
+      };
+    } catch (error) {
+      console.error('Error fetching shift by ID:', error);
+      throw error;
+    }
+  }
+};

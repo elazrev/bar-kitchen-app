@@ -6,11 +6,14 @@ import {
   FaBook, 
   FaMoon, 
   FaSun, 
-  FaUsers 
+  FaUsers,
+  FaCoins 
 } from 'react-icons/fa';
 import AdminTaskList from './AdminTaskList';
 import AdminRecipes from './AdminRecipes';
 import UserManagement from './UserManagement';
+import { hasPermission, PERMISSIONS } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 
 const DashboardContainer = styled.div`
   padding: 2rem 0;
@@ -80,8 +83,30 @@ const Tab = styled.button`
   }
 `;
 
+const TipsButton = styled(Link)`
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--primary-color);
+  color: white;
+  text-decoration: none;
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  margin-bottom: 2rem;
+  transition: background-color 0.2s;
+  
+  &:hover {
+    background-color: #1e3a6a;
+  }
+  
+  svg {
+    margin-left: 0.5rem;
+  }
+`;
+
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('openingTasks');
+  const { user } = useAuth();
   
   const renderTabContent = () => {
     switch (activeTab) {
@@ -98,6 +123,13 @@ const Dashboard = () => {
     }
   };
   
+  // בדיקה אם למשתמש יש הרשאה לניהול טיפים
+  const canManageTips = user && (
+    hasPermission(user.role, PERMISSIONS.MANAGE_TIPS) || 
+    hasPermission(user.role, PERMISSIONS.VIEW_TIP_REPORTS) || 
+    hasPermission(user.role, PERMISSIONS.MANAGE_EMPLOYEES)
+  );
+  
   return (
     <DashboardContainer>
       <Header>
@@ -106,6 +138,13 @@ const Dashboard = () => {
         </Icon>
         <Title>ניהול תוכן</Title>
       </Header>
+      
+      {canManageTips && (
+        <TipsButton to="/admin/tips">
+          <FaCoins />
+          ניהול טיפים
+        </TipsButton>
+      )}
       
       <TabsContainer>
         <Tab 
