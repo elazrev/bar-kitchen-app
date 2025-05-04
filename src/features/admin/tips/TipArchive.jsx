@@ -1,12 +1,16 @@
 // src/features/admin/tips/TipArchive.jsx
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
-import { FaChartBar, FaSearch, FaPrint, FaCalendarAlt } from 'react-icons/fa';
+import { FaChartBar, FaSearch, FaPrint, FaEdit, FaSave, FaTimes, FaUserPlus, FaTrash } from 'react-icons/fa';
 import { toast } from 'react-toastify';
 import { tipShiftAPI, tipEmployeeAPI } from '../../../services/api';
 
 const ArchiveContainer = styled.div`
   padding: 2rem 0;
+  
+  @media (max-width: 768px) {
+    padding: 1rem 0;
+  }
 `;
 
 const Header = styled.div`
@@ -86,6 +90,7 @@ const Button = styled.button`
   background-color: ${props => 
     props.secondary ? 'var(--secondary-color)' : 
     props.success ? 'var(--success-color)' :
+    props.danger ? 'var(--error-color)' :
     'var(--primary-color)'
   };
   color: white;
@@ -106,6 +111,7 @@ const Button = styled.button`
     background-color: ${props => 
       props.secondary ? '#4267a3' : 
       props.success ? '#3d8b40' :
+      props.danger ? '#d32f2f' :
       '#1e3a6a'
     };
   }
@@ -114,6 +120,12 @@ const Button = styled.button`
     background-color: #cccccc;
     cursor: not-allowed;
   }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
 `;
 
 const Table = styled.table`
@@ -159,6 +171,33 @@ const ReportTitle = styled.h2`
   font-size: 1.5rem;
 `;
 
+const EditModeContainer = styled.div`
+  margin-top: 2rem;
+`;
+
+const EmployeeForm = styled.form`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+  }
+`;
+
+const SmallButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: ${props => props.danger ? 'var(--error-color)' : 'var(--primary-color)'};
+  
+  &:hover {
+    opacity: 0.7;
+  }
+`;
+
 const TipArchive = () => {
   const [reportType, setReportType] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -170,6 +209,10 @@ const TipArchive = () => {
   const [employees, setEmployees] = useState([]);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedEmployees, setEditedEmployees] = useState([]);
+  const [totalTips, setTotalTips] = useState('');
+  const [existingShift, setExistingShift] = useState(null);
 
   useEffect(() => {
     loadEmployees();
@@ -186,6 +229,8 @@ const TipArchive = () => {
 
   const generateReport = async () => {
     setLoading(true);
+    setIsEditMode(false);
+    setExistingShift(null);
     
     try {
       let data;
@@ -199,6 +244,11 @@ const TipArchive = () => {
           
           data = await tipShiftAPI.getShiftsByDateRange(dayStart, dayEnd);
           setReportData({ type: 'daily', data });
+          
+          // אם יש כבר דוח ליום זה, נשמור את המזהה שלו
+          if (data.length > 0) {
+            setExistingShift(data[0]);
+          }
           break;
           
         case 'employee':
@@ -226,6 +276,119 @@ const TipArchive = () => {
       toast.success('הדוח נוצר בהצלחה');
     } catch (err) {
       toast.error('שגיאה ביצירת הדוח');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditClick = () => {
+    if (reportData && reportData.type === 'daily' && reportData.data.length > 0) {
+      const shift = reportData.data[0];
+      setEditedEmployees(shift.employees.map(emp => ({
+        ...emp,
+        hours: emp.hours.toString(),
+      })));
+      setTotalTips(shift.totalTips.toString());
+      setIsEditMode(true);
+    }
+  };
+
+  const handleAddEmployee = () => {
+    setEditedEmployees([
+      ...editedEmployees,
+      {
+        employeeId: '',
+        name: '',
+        hours: '',
+        tipAmount: 0,
+      }
+    ]);
+  };
+
+  const handleEmployeeChange = (index, field, value) => {
+    const newEmployees = [...editedEmployees];
+    
+    if (field === 'employeeId') {
+      const selectedEmp = employees.find(e => e.id === value);
+      if (selectedEmp) {
+        newEmployees[index] = {
+          ...newEmployees[index],
+          employeeId: value,
+          name: selectedEmp.name
+        };
+      }
+    } else {
+      newEmployees[index] = {
+        ...newEmployees[index],
+        [field]: value
+      };
+    }
+    
+    setEditedEmployees(newEmployees);
+  };
+
+  const handleRemoveEmployee = (index) => {
+    const newEmployees = editedEmployees.filter((_, i) => i !== index);
+    setEditedEmployees(newEmployees);
+  };
+
+  const calculateTipsForEdit = () => {
+    const parsedTotalTips = parseFloat(totalTips);
+    if (isNaN(parsedTotalTips)) return;
+
+    const totalHours = editedEmployees.reduce((sum, emp) => 
+      sum + (parseFloat(emp.hours) || 0), 0);
+    
+    if (totalHours === 0) return;
+
+    const updatedEmployees = editedEmployees.map(emp => {
+      const hours = parseFloat(emp.hours) || 0;
+      const ratio = hours / totalHours;
+      const tipAmount = Math.floor(parsedTotalTips * ratio);
+      
+      return {
+        ...emp,
+        tipAmount,
+        ratio
+      };
+    });
+
+    setEditedEmployees(updatedEmployees);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      setLoading(true);
+
+      // חישוב היתרה
+      const parsedTotalTips = parseFloat(totalTips);
+      const distributedTips = editedEmployees.reduce((sum, emp) => sum + emp.tipAmount, 0);
+      const leftover = parsedTotalTips - distributedTips;
+
+      const shiftData = {
+        date: new Date(selectedDate),
+        totalTips: parsedTotalTips,
+        employees: editedEmployees.map(emp => ({
+          ...emp,
+          hours: parseFloat(emp.hours),
+        })),
+        leftover,
+        createdBy: existingShift?.createdBy || 'admin', // צריך להחליף עם המשתמש הנוכחי
+      };
+
+      if (existingShift) {
+        await tipShiftAPI.updateShift(existingShift.id, shiftData);
+        toast.success('הדוח עודכן בהצלחה');
+      } else {
+        await tipShiftAPI.saveShift(shiftData);
+        toast.success('הדוח נשמר בהצלחה');
+      }
+
+      setIsEditMode(false);
+      generateReport(); // רענון הדוח
+    } catch (err) {
+      toast.error('שגיאה בשמירת הדוח');
       console.error(err);
     } finally {
       setLoading(false);
@@ -473,7 +636,6 @@ const TipArchive = () => {
             
             .print-container {
               padding: 20px;
-              margin: 0 auto;
             }
             
             .footer {
@@ -498,7 +660,7 @@ const TipArchive = () => {
           ${generateTableHTML()}
         </div>
         <div class="footer">
-          <p>כל הזכויות שמורות © elaz.rev ${new Date().getFullYear()}</p>
+          <p>כל הזכויות שמורות © ${new Date().getFullYear()}</p>
         </div>
       </body>
       </html>
@@ -507,7 +669,6 @@ const TipArchive = () => {
     printWindow.document.write(printContent);
     printWindow.document.close();
     
-    // המתן מעט להטענת התוכן לפני ההדפסה
     setTimeout(() => {
       printWindow.print();
       printWindow.close();
@@ -628,129 +789,214 @@ const TipArchive = () => {
         <Card>
           <ReportHeader>
             <ReportTitle>{getReportTitle()}</ReportTitle>
-            <Button secondary onClick={handlePrint}>
-              <FaPrint />
-              הדפס
-            </Button>
+            <ButtonGroup>
+              {reportData.type === 'daily' && !isEditMode && (
+                <Button secondary onClick={handleEditClick}>
+                  <FaEdit />
+                  ערוך
+                </Button>
+              )}
+              <Button secondary onClick={handlePrint}>
+                <FaPrint />
+                הדפס
+              </Button>
+            </ButtonGroup>
           </ReportHeader>
           
-          {reportData.type === 'monthly' && reportData.data.employeeSummary && (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>שם עובד</Th>
-                  <Th>מס' משמרות</Th>
-                  <Th>סה"כ שעות</Th>
-                  <Th>סה"כ טיפים</Th>
-                  <Th>טיפ ממוצע לשעה</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.data.employeeSummary.map((emp, index) => (
-                  <tr key={index}>
-                    <Td>{emp.name}</Td>
-                    <Td>{emp.shiftsCount}</Td>
-                    <Td>{emp.totalHours}</Td>
-                    <Td>₪{emp.totalTips}</Td>
-                    <Td>₪{(emp.totalTips / emp.totalHours).toFixed(2)}</Td>
-                  </tr>
-                ))}
-              </tbody>
-              <TFoot>
-                <tr>
-                  <td colSpan="3">סה"כ טיפים:</td>
-                  <td>₪{reportData.data.totalTips}</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td colSpan="3">יתרה שלא חולקה:</td>
-                  <td>₪{reportData.data.leftoverTotal}</td>
-                  <td></td>
-                </tr>
-              </TFoot>
-            </Table>
-          )}
-          
-          {(reportData.type === 'daily' || reportData.type === 'employee') && reportData.data && (
-            <Table>
-              <thead>
-                <tr>
-                  <Th>תאריך</Th>
-                  {reportData.type === 'daily' && <Th>שם</Th>}
-                  <Th>שעות</Th>
-                  <Th>טיפים</Th>
-                  <Th>טיפ לשעה</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {reportData.data.length === 0 ? (
-                  <tr>
-                    <td colSpan={reportData.type === 'daily' ? 5 : 4} style={{ textAlign: 'center', padding: '2rem' }}>
-                      אין נתונים לתצוגה
-                    </td>
-                  </tr>
-                ) : (
-                  reportData.data.map((shift, shiftIndex) => {
-                    if (reportData.type === 'employee') {
-                      const employeeData = shift.employees.find(e => e.employeeId === selectedEmployee);
-                      if (employeeData) {
-                        return (
-                          <tr key={shiftIndex}>
-                            <Td>{formatDate(shift.date)}</Td>
-                            <Td>{employeeData.hours}</Td>
-                            <Td>₪{employeeData.tipAmount}</Td>
-                            <Td>₪{(employeeData.tipAmount / employeeData.hours).toFixed(2)}</Td>
-                          </tr>
-                        );
-                      }
-                      return null;
-                    } else {
-                      return shift.employees.map((emp, empIndex) => (
-                        <tr key={`${shiftIndex}-${empIndex}`}>
-                          <Td>{formatDate(shift.date)}</Td>
-                          <Td>{emp.name}</Td>
-                          <Td>{emp.hours}</Td>
-                          <Td>₪{emp.tipAmount}</Td>
-                          <Td>₪{(emp.tipAmount / emp.hours).toFixed(2)}</Td>
-                        </tr>
-                      ));
-                    }
-                  })
-                )}
-              </tbody>
-              {reportData.type === 'employee' && reportData.data.length > 0 && (
-                <TFoot>
-                  <tr>
-                    <td>סה"כ</td>
-                    <td>
-                      {reportData.data.reduce((sum, shift) => {
-                        const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                        return sum + (emp ? parseFloat(emp.hours) : 0);
-                      }, 0).toFixed(1)}
-                    </td>
-                    <td>
-                      ₪{reportData.data.reduce((sum, shift) => {
-                        const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                        return sum + (emp ? emp.tipAmount : 0);
-                      }, 0)}
-                    </td>
-                    <td>
-                      ₪{(() => {
-                        const totalHours = reportData.data.reduce((sum, shift) => {
-                          const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                          return sum + (emp ? parseFloat(emp.hours) : 0);
-                        }, 0);
-                        const totalTips = reportData.data.reduce((sum, shift) => {
-                          const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                          return sum + (emp ? emp.tipAmount : 0);
-                        }, 0);
-                        return (totalTips / totalHours).toFixed(2);
-                      })()}
-                    </td>
-                  </tr>
-                </TFoot>
+          {isEditMode ? (
+            <EditModeContainer>
+              <FormGroup>
+                <Label>סכום טיפים כולל</Label>
+                <Input
+                  type="number"
+                  value={totalTips}
+                  onChange={(e) => setTotalTips(e.target.value)}
+                  onBlur={calculateTipsForEdit}
+                />
+              </FormGroup>
+              
+              <h3>עובדים במשמרת</h3>
+              
+              {editedEmployees.map((emp, index) => (
+                <EmployeeForm key={index}>
+                  <FormGroup>
+                    <Label>בחר עובד</Label>
+                    <Select
+                      value={emp.employeeId}
+                      onChange={(e) => handleEmployeeChange(index, 'employeeId', e.target.value)}
+                    >
+                      <option value="">בחר עובד</option>
+                      {employees.filter(e => e.isActive).map(employee => (
+                        <option key={employee.id} value={employee.id}>
+                          {employee.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormGroup>
+                  
+                  <FormGroup>
+                    <Label>שעות</Label>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      value={emp.hours}
+                      onChange={(e) => handleEmployeeChange(index, 'hours', e.target.value)}
+                      onBlur={calculateTipsForEdit}
+                    />
+                  </FormGroup>
+                  
+                  <FormGroup>
+                    <Label>טיפים</Label>
+                    <Input
+                      type="number"
+                      value={emp.tipAmount}
+                      readOnly
+                    />
+                  </FormGroup>
+                  
+                  <SmallButton type="button" onClick={() => handleRemoveEmployee(index)} danger>
+                    <FaTrash />
+                  </SmallButton>
+                </EmployeeForm>
+              ))}
+              
+              <Button type="button" secondary onClick={handleAddEmployee}>
+                <FaUserPlus />
+                הוסף עובד
+              </Button>
+              
+              <ButtonGroup style={{ marginTop: '1rem' }}>
+                <Button success onClick={handleSaveEdit} disabled={loading}>
+                  <FaSave />
+                  שמור שינויים
+                </Button>
+                <Button danger onClick={() => setIsEditMode(false)}>
+                  <FaTimes />
+                  בטל
+                </Button>
+              </ButtonGroup>
+            </EditModeContainer>
+          ) : (
+            <>
+              {reportData.type === 'monthly' && reportData.data.employeeSummary && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>שם עובד</Th>
+                      <Th>מס' משמרות</Th>
+                      <Th>סה"כ שעות</Th>
+                      <Th>סה"כ טיפים</Th>
+                      <Th>טיפ ממוצע לשעה</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.data.employeeSummary.map((emp, index) => (
+                      <tr key={index}>
+                        <Td>{emp.name}</Td>
+                        <Td>{emp.shiftsCount}</Td>
+                        <Td>{emp.totalHours}</Td>
+                        <Td>₪{emp.totalTips}</Td>
+                        <Td>₪{(emp.totalTips / emp.totalHours).toFixed(2)}</Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <TFoot>
+                    <tr>
+                      <td colSpan="3">סה"כ טיפים:</td>
+                      <td>₪{reportData.data.totalTips}</td>
+                      <td></td>
+                    </tr>
+                    <tr>
+                      <td colSpan="3">יתרה שלא חולקה:</td>
+                      <td>₪{reportData.data.leftoverTotal}</td>
+                      <td></td>
+                    </tr>
+                  </TFoot>
+                </Table>
               )}
-            </Table>
+              
+              {(reportData.type === 'daily' || reportData.type === 'employee') && reportData.data && (
+                <Table>
+                  <thead>
+                    <tr>
+                      <Th>תאריך</Th>
+                      {reportData.type === 'daily' && <Th>שם</Th>}
+                      <Th>שעות</Th>
+                      <Th>טיפים</Th>
+                      <Th>טיפ לשעה</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.data.length === 0 ? (
+                      <tr>
+                        <td colSpan={reportData.type === 'daily' ? 5 : 4} style={{ textAlign: 'center', padding: '2rem' }}>
+                          אין נתונים לתצוגה
+                        </td>
+                      </tr>
+                    ) : (
+                      reportData.data.map((shift, shiftIndex) => {
+                        if (reportData.type === 'employee') {
+                          const employeeData = shift.employees.find(e => e.employeeId === selectedEmployee);
+                          if (employeeData) {
+                            return (
+                              <tr key={shiftIndex}>
+                                <Td>{formatDate(shift.date)}</Td>
+                                <Td>{employeeData.hours}</Td>
+                                <Td>₪{employeeData.tipAmount}</Td>
+                                <Td>₪{(employeeData.tipAmount / employeeData.hours).toFixed(2)}</Td>
+                              </tr>
+                            );
+                          }
+                          return null;
+                        } else {
+                          return shift.employees.map((emp, empIndex) => (
+                            <tr key={`${shiftIndex}-${empIndex}`}>
+                              <Td>{formatDate(shift.date)}</Td>
+                              <Td>{emp.name}</Td>
+                              <Td>{emp.hours}</Td>
+                              <Td>₪{emp.tipAmount}</Td>
+                              <Td>₪{(emp.tipAmount / emp.hours).toFixed(2)}</Td>
+                            </tr>
+                          ));
+                        }
+                      })
+                    )}
+                  </tbody>
+                  {reportData.type === 'employee' && reportData.data.length > 0 && (
+                    <TFoot>
+                      <tr>
+                        <td>סה"כ</td>
+                        <td>
+                          {reportData.data.reduce((sum, shift) => {
+                            const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                            return sum + (emp ? parseFloat(emp.hours) : 0);
+                          }, 0).toFixed(1)}
+                        </td>
+                        <td>
+                          ₪{reportData.data.reduce((sum, shift) => {
+                            const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                            return sum + (emp ? emp.tipAmount : 0);
+                          }, 0)}
+                        </td>
+                        <td>
+                          ₪{(() => {
+                            const totalHours = reportData.data.reduce((sum, shift) => {
+                              const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                              return sum + (emp ? parseFloat(emp.hours) : 0);
+                            }, 0);
+                            const totalTips = reportData.data.reduce((sum, shift) => {
+                              const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                              return sum + (emp ? emp.tipAmount : 0);
+                            }, 0);
+                            return (totalTips / totalHours).toFixed(2);
+                          })()}
+                        </td>
+                      </tr>
+                    </TFoot>
+                  )}
+                </Table>
+              )}
+            </>
           )}
         </Card>
       )}

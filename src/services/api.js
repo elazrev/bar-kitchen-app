@@ -516,6 +516,21 @@ export const saveTaskReport = async (reportData) => {
         throw error;
       }
     },
+
+    async updateShift(shiftId, updatedData) {
+      try {
+        const shiftRef = doc(db, 'tip_shifts', shiftId);
+        await updateDoc(shiftRef, {
+          ...updatedData,
+          updatedAt: serverTimestamp()
+        });
+        
+        return { id: shiftId, ...updatedData };
+      } catch (error) {
+        console.error('Error updating shift:', error);
+        throw error;
+      }
+    },
   
     async getShiftsByDateRange(startDate, endDate) {
       try {
