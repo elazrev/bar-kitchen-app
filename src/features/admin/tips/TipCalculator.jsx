@@ -258,19 +258,21 @@ const TipCalculator = () => {
       const hours = parseFloat(emp.hours || 0);
       const ratio = hours / totalHours;
       const exactAmount = parsedTotalTips * ratio;
-      const roundedAmount = Math.floor(exactAmount);
       
-      // חישוב הפרשות ושכר שעתי
+      // חישוב הפרשות
       const employee = employees.find(e => e.id === emp.employeeId);
       const hourlyDeduction = employee?.hourlyDeduction || 20;
       const dailyDeduction = hours * hourlyDeduction;
-      const finalTipAmount = Math.max(0, roundedAmount - dailyDeduction);
+      
+      // החסרת הפרשות מהסכום המדויק ואז עיגול
+      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
+      const finalTipAmount = Math.floor(exactAmountAfterDeduction);
       const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
       
       return {
         ...emp,
         ratio,
-        tipAmount: roundedAmount,
+        tipAmount: Math.floor(exactAmount), // סכום לפני הפרשות (לצורך הצגה)
         hourlyDeduction,
         dailyDeduction,
         finalTipAmount,
@@ -278,7 +280,7 @@ const TipCalculator = () => {
       };
     });
     
-    const distributedAmount = calculatedResults.reduce((sum, result) => sum + result.tipAmount, 0);
+    const distributedAmount = calculatedResults.reduce((sum, result) => sum + result.finalTipAmount, 0);
     const newLeftover = parsedTotalTips - distributedAmount;
     
     setResults(calculatedResults);
