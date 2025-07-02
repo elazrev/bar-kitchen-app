@@ -83,6 +83,8 @@ const FormRow = styled.div`
   
   @media (max-width: 768px) {
     grid-template-columns: 1fr;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
   }
 `;
 
@@ -132,6 +134,11 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-top: 1rem;
+  
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+  }
 `;
 
 const Th = styled.th`
@@ -140,11 +147,21 @@ const Th = styled.th`
   background-color: #f9f9f9;
   border-bottom: 2px solid var(--light-gray);
   font-weight: 600;
+  
+  @media (max-width: 768px) {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.9em;
+  }
 `;
 
 const Td = styled.td`
   padding: 1rem;
   border-bottom: 1px solid var(--light-gray);
+  
+  @media (max-width: 768px) {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.9em;
+  }
 `;
 
 const TFoot = styled.tfoot`
@@ -1127,7 +1144,78 @@ const TipArchive = () => {
               )}
               
               {(reportData.type === 'daily' || reportData.type === 'employee') && reportData.data && Array.isArray(reportData.data) && (
-                <Table>
+                <>
+                  {/* סיכום מפורט לדוח יומי */}
+                  {reportData.type === 'daily' && reportData.data && reportData.data.length > 0 && (
+                    <div style={{ 
+                      background: '#f8f9fa', 
+                      padding: '1rem', 
+                      borderRadius: '8px', 
+                      marginBottom: '2rem',
+                      border: '1px solid #e9ecef'
+                    }}>
+                      <h3 style={{ margin: '0 0 1rem 0', color: '#495057' }}>סיכום המשמרת:</h3>
+                      <div style={{ 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                        gap: '1rem' 
+                      }}>
+                        {reportData.data[0].cashTips !== undefined && reportData.data[0].creditTips !== undefined ? (
+                          // מבנה חדש
+                          <>
+                            <div>
+                              <strong>טיפים במזומן:</strong> ₪{formatNumber(reportData.data[0].cashTips)}
+                            </div>
+                            <div>
+                              <strong>טיפים באשראי:</strong> ₪{formatNumber(reportData.data[0].creditTips)}
+                            </div>
+                            <div>
+                              <strong>סך הפרשות עובדים:</strong> ₪{formatNumber(reportData.data[0].totalDeductions || 0)}
+                            </div>
+                            <div>
+                              <strong>כסף מהקופה:</strong> ₪{formatNumber(reportData.data[0].cashFromRegister || 0)}
+                            </div>
+                            <div>
+                              <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(reportData.data[0].totalTipsForDistribution || 0)}
+                            </div>
+                          </>
+                        ) : (
+                          // מבנה ישן
+                          <div>
+                            <strong>סך טיפים:</strong> ₪{formatNumber(reportData.data[0].totalTips)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* חישוב היתרה */}
+                      <div style={{ 
+                        background: '#f0f8ff', 
+                        padding: '1rem', 
+                        borderRadius: '8px', 
+                        marginTop: '1rem',
+                        border: '1px solid #cce5ff'
+                      }}>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#004085' }}>חישוב היתרה:</h4>
+                        <div style={{ 
+                          display: 'grid', 
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                          gap: '1rem' 
+                        }}>
+                          <div>
+                            <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(reportData.data[0].totalTipsForDistribution || reportData.data[0].totalTips)}
+                          </div>
+                          <div>
+                            <strong>סך תשלומים לעובדים:</strong> ₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.finalTipAmount || emp.tipAmount || 0), 0))}
+                          </div>
+                          <div style={{ color: '#dc3545', fontWeight: '600' }}>
+                            <strong>יתרה שלא חולקה (שקלים בודדים):</strong> ₪{formatNumber(reportData.data[0].leftover)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <Table>
                   <thead>
                     <tr>
                       <Th>תאריך</Th>
@@ -1181,31 +1269,7 @@ const TipArchive = () => {
                       })
                     )}
                   </tbody>
-                  {reportData.type === 'daily' && reportData.data && reportData.data.length > 0 && (
-                    <TFoot>
-                      <tr>
-                        <td colSpan="2">סה"כ טיפים:</td>
-                        <td></td>
-                        <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data[0].totalTips)}</td>
-                        <td></td>
-                      </tr>
-                      <tr>
-                        <td colSpan="2">סה"כ הפרשות:</td>
-                        <td></td>
-                        <td style={{ fontWeight: '600', color: '#dc2626' }}>-₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.dailyDeduction || ((emp.hours || 0) * 20)), 0))}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan="2">סה"כ טיפים שחולקו:</td>
-                        <td></td>
-                        <td style={{ fontWeight: '600', color: '#7c3aed' }}>₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.finalTipAmount || emp.tipAmount || 0), 0))}</td>
-                      </tr>
-                      <tr>
-                        <td colSpan="2">יתרה שלא חולקה:</td>
-                        <td></td>
-                        <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data[0].leftover)}</td>
-                      </tr>
-                    </TFoot>
-                  )}
+
                   {reportData.type === 'employee' && reportData.data && reportData.data.length > 0 && (
                     <TFoot>
                       <tr>
@@ -1244,12 +1308,13 @@ const TipArchive = () => {
                     </TFoot>
                   )}
                 </Table>
-              )}
-            </>
-          )}
-        </Card>
-      )}
-    </ArchiveContainer>
+              </>
+            )}
+          </>
+        )}
+      </Card>
+    )}
+  </ArchiveContainer>
   );
 };
 

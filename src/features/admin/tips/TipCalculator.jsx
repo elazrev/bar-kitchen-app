@@ -7,6 +7,10 @@ import { useAuth } from '../../../hooks/useAuth';
 
 const CalculatorContainer = styled.div`
   padding: 2rem 0;
+  
+  @media (max-width: 768px) {
+    padding: 1rem 0;
+  }
 `;
 
 const Header = styled.div`
@@ -32,6 +36,11 @@ const Card = styled.div`
   box-shadow: var(--box-shadow);
   padding: 2rem;
   margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
 `;
 
 const FormGroup = styled.div`
@@ -117,6 +126,12 @@ const EmployeeCard = styled.div`
   display: flex;
   align-items: center;
   gap: 1rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
 `;
 
 const RemoveButton = styled.button`
@@ -137,6 +152,11 @@ const Table = styled.table`
   margin-top: 2rem;
   background: #fff;
   direction: rtl;
+  
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
+    margin-top: 1rem;
+  }
 `;
 
 const Th = styled.th`
@@ -148,6 +168,11 @@ const Th = styled.th`
   border-right: 1px solid #e5e7eb;
   font-weight: 700;
   font-size: 1.05em;
+  
+  @media (max-width: 768px) {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.9em;
+  }
 `;
 
 const Td = styled.td`
@@ -156,6 +181,11 @@ const Td = styled.td`
   border-right: 1px solid #e5e7eb;
   text-align: right;
   font-size: 1em;
+  
+  @media (max-width: 768px) {
+    padding: 0.5rem 0.25rem;
+    font-size: 0.9em;
+  }
 `;
 
 const TFoot = styled.tfoot`
@@ -413,7 +443,12 @@ const TipCalculator = () => {
       </Header>
       
       <Card>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+          gap: '1rem', 
+          marginBottom: '2rem' 
+        }}>
           <FormGroup>
             <Label>תאריך משמרת:</Label>
             <Input
@@ -436,7 +471,12 @@ const TipCalculator = () => {
           </FormGroup>
         </div>
         
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+          gap: '1rem', 
+          marginBottom: '2rem' 
+        }}>
           <FormGroup>
             <Label>טיפים באשראי:</Label>
             <Input
@@ -500,7 +540,12 @@ const TipCalculator = () => {
                   placeholder="שעות עבודה"
                   min="0"
                   step="0.5"
-                  style={{ width: '150px' }}
+                  style={{ 
+                    width: '150px',
+                    '@media (max-width: 768px)': {
+                      width: '100%'
+                    }
+                  }}
                 />
                 <RemoveButton onClick={() => removeSelectedEmployee(index)}>
                   <FaTrash />
@@ -510,7 +555,12 @@ const TipCalculator = () => {
           </EmployeeList>
         )}
         
-        <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+        <div style={{ 
+          display: 'flex', 
+          gap: '1rem', 
+          marginTop: '2rem',
+          flexWrap: 'wrap'
+        }}>
           <Button onClick={calculateTips}>
             חשב טיפים
           </Button>
@@ -535,7 +585,11 @@ const TipCalculator = () => {
               border: '1px solid #e9ecef'
             }}>
               <h3 style={{ margin: '0 0 1rem 0', color: '#495057' }}>סיכום הטיפים:</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                gap: '1rem' 
+              }}>
                 <div>
                   <strong>טיפים במזומן:</strong> ₪{formatNumber(results.cashTips)}
                 </div>
@@ -563,7 +617,11 @@ const TipCalculator = () => {
               border: '1px solid #cce5ff'
             }}>
               <h3 style={{ margin: '0 0 1rem 0', color: '#004085' }}>חישוב היתרה:</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div style={{ 
+                display: 'grid', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                gap: '1rem' 
+              }}>
                 <div>
                   <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(results.totalTipsForDistribution)}
                 </div>
@@ -630,7 +688,12 @@ const TipCalculator = () => {
               </p>
             )}
             
-            <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+            <div style={{ 
+              marginTop: '2rem', 
+              textAlign: 'center',
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
               <Button onClick={saveShift} disabled={loading}>
                 <FaSave />
                 {loading ? 'שומר...' : 'שמור משמרת'}
