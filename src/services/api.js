@@ -579,6 +579,8 @@ export const saveTaskReport = async (reportData) => {
         
         const employeeSummary = {};
         let totalTips = 0;
+        let totalDeductions = 0;
+        let totalFinalTips = 0;
         
         shifts.forEach(shift => {
           shift.employees.forEach(emp => {
@@ -588,13 +590,25 @@ export const saveTaskReport = async (reportData) => {
                 name: emp.name,
                 totalHours: 0,
                 totalTips: 0,
+                totalDeductions: 0,
+                totalFinalTips: 0,
                 shiftsCount: 0
               };
             }
             
-            employeeSummary[emp.employeeId].totalHours += parseFloat(emp.hours) || 0;
-            employeeSummary[emp.employeeId].totalTips += parseFloat(emp.tipAmount) || 0;
+            const hours = parseFloat(emp.hours) || 0;
+            const tipAmount = parseFloat(emp.tipAmount) || 0;
+            const dailyDeduction = emp.dailyDeduction || (hours * 20);
+            const finalTipAmount = emp.finalTipAmount || Math.max(0, tipAmount - dailyDeduction);
+            
+            employeeSummary[emp.employeeId].totalHours += hours;
+            employeeSummary[emp.employeeId].totalTips += tipAmount;
+            employeeSummary[emp.employeeId].totalDeductions += dailyDeduction;
+            employeeSummary[emp.employeeId].totalFinalTips += finalTipAmount;
             employeeSummary[emp.employeeId].shiftsCount += 1;
+            
+            totalDeductions += dailyDeduction;
+            totalFinalTips += finalTipAmount;
           });
           
           totalTips += parseFloat(shift.totalTips) || 0;
@@ -604,6 +618,8 @@ export const saveTaskReport = async (reportData) => {
           period: { year, month },
           shifts: shifts.length,
           totalTips,
+          totalDeductions,
+          totalFinalTips,
           employeeSummary: Object.values(employeeSummary),
           leftoverTotal: shifts.reduce((sum, shift) => sum + (parseFloat(shift.leftover) || 0), 0)
         };

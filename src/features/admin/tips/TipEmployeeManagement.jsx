@@ -73,7 +73,7 @@ const Select = styled.select`
 
 const FormRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr auto;
+  grid-template-columns: 2fr 1fr 1fr auto;
   gap: 1rem;
   align-items: flex-end;
   
@@ -169,7 +169,11 @@ const ActionButton = styled.button`
 const TipEmployeeManagement = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [newEmployee, setNewEmployee] = useState({ name: '', role: 'waiter' });
+  const [newEmployee, setNewEmployee] = useState({ 
+    name: '', 
+    role: 'waiter',
+    hourlyDeduction: 20 
+  });
   
   useEffect(() => {
     loadEmployees();
@@ -196,9 +200,14 @@ const TipEmployeeManagement = () => {
       return;
     }
     
+    if (!newEmployee.hourlyDeduction || newEmployee.hourlyDeduction <= 0) {
+      toast.error('יש להזין הפרשה שעתית תקינה');
+      return;
+    }
+    
     try {
       await tipEmployeeAPI.addEmployee(newEmployee);
-      setNewEmployee({ name: '', role: 'waiter' });
+      setNewEmployee({ name: '', role: 'waiter', hourlyDeduction: 20 });
       await loadEmployees();
       toast.success('העובד נוסף בהצלחה');
     } catch (err) {
@@ -274,6 +283,19 @@ const TipEmployeeManagement = () => {
               </Select>
             </FormGroup>
             
+            <FormGroup>
+              <Label htmlFor="hourlyDeduction">הפרשה שעתית (₪)</Label>
+              <Input
+                id="hourlyDeduction"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="20"
+                value={newEmployee.hourlyDeduction}
+                onChange={(e) => setNewEmployee({ ...newEmployee, hourlyDeduction: parseFloat(e.target.value) || 0 })}
+              />
+            </FormGroup>
+            
             <Button type="submit">
               <FaUserPlus />
               הוסף
@@ -293,6 +315,7 @@ const TipEmployeeManagement = () => {
               <tr>
                 <Th>שם</Th>
                 <Th>תפקיד</Th>
+                <Th>הפרשה שעתית</Th>
                 <Th>סטטוס</Th>
                 <Th>פעולות</Th>
               </tr>
@@ -302,6 +325,7 @@ const TipEmployeeManagement = () => {
                 <tr key={employee.id}>
                   <Td>{employee.name}</Td>
                   <Td>{employee.role === 'waiter' ? 'מלצר/ית' : 'ברמן/ית'}</Td>
+                  <Td>₪{employee.hourlyDeduction || 20}</Td>
                   <Td>
                     <StatusBadge active={employee.isActive}>
                       {employee.isActive ? 'פעיל' : 'לא פעיל'}

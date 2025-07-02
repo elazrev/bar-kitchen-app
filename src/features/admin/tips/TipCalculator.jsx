@@ -134,26 +134,64 @@ const RemoveButton = styled.button`
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
-  margin-top: 1rem;
+  margin-top: 2rem;
+  background: #fff;
+  direction: rtl;
 `;
 
 const Th = styled.th`
   text-align: right;
-  padding: 1rem;
-  background-color: #f9f9f9;
-  border-bottom: 2px solid var(--light-gray);
-  font-weight: 600;
+  padding: 0.75rem;
+  background-color: #f3f4f6;
+  border-bottom: 2px solid #e5e7eb;
+  border-top: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  font-weight: 700;
+  font-size: 1.05em;
 `;
 
 const Td = styled.td`
-  padding: 1rem;
-  border-bottom: 1px solid var(--light-gray);
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+  text-align: right;
+  font-size: 1em;
 `;
 
 const TFoot = styled.tfoot`
-  background-color: #f9f9f9;
-  font-weight: 600;
+  background: #f9fafb;
+  font-weight: 700;
+  td {
+    border-top: 2px solid #e5e7eb;
+    font-size: 1.05em;
+  }
 `;
+
+// עיצוב להדפסה
+const PrintStyles = styled.div`
+  @media print {
+    table, th, td {
+      border: 1px solid #888 !important;
+      color: #222 !important;
+    }
+    th {
+      background: #eee !important;
+      color: #111 !important;
+    }
+    td, th {
+      padding: 0.5rem !important;
+      font-size: 1em !important;
+    }
+    body {
+      background: #fff !important;
+    }
+  }
+`;
+
+// פונקציה להצגת מספרים עם שתי ספרות אחרי הנקודה
+function formatNumber(num) {
+  return Number(num || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const TipCalculator = () => {
   const [employees, setEmployees] = useState([]);
@@ -222,10 +260,21 @@ const TipCalculator = () => {
       const exactAmount = parsedTotalTips * ratio;
       const roundedAmount = Math.floor(exactAmount);
       
+      // חישוב הפרשות ושכר שעתי
+      const employee = employees.find(e => e.id === emp.employeeId);
+      const hourlyDeduction = employee?.hourlyDeduction || 20;
+      const dailyDeduction = hours * hourlyDeduction;
+      const finalTipAmount = Math.max(0, roundedAmount - dailyDeduction);
+      const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
+      
       return {
         ...emp,
         ratio,
-        tipAmount: roundedAmount
+        tipAmount: roundedAmount,
+        hourlyDeduction,
+        dailyDeduction,
+        finalTipAmount,
+        hourlyRate
       };
     });
     
@@ -273,7 +322,14 @@ const TipCalculator = () => {
       const shiftData = {
         date: new Date(shiftDate),
         totalTips: parseFloat(totalTips),
-        employees: results,
+        employees: results.map(result => ({
+          ...result,
+          // שמירת כל הנתונים החדשים
+          hourlyDeduction: result.hourlyDeduction,
+          dailyDeduction: result.dailyDeduction,
+          finalTipAmount: result.finalTipAmount,
+          hourlyRate: result.hourlyRate
+        })),
         leftover: leftover,
         createdBy: user.uid
       };
@@ -400,49 +456,56 @@ const TipCalculator = () => {
       </Card>
       
       {results && (
-        <Card>
-          <h2>תוצאות החישוב</h2>
-          
-          <Table>
-            <thead>
-              <tr>
-                <Th>שם העובד</Th>
-                <Th>שעות</Th>
-                <Th>אחוז מהסה"כ</Th>
-                <Th>סכום לתשלום (₪)</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((result, index) => (
-                <tr key={index}>
-                  <Td>{result.name}</Td>
-                  <Td>{result.hours}</Td>
-                  <Td>{(result.ratio * 100).toFixed(1)}%</Td>
-                  <Td>{result.tipAmount} ₪</Td>
+        <PrintStyles>
+          <Card>
+            <h2>תוצאות החישוב</h2>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>שם העובד</Th>
+                  <Th>שעות</Th>
+                  <Th>אחוז מהסה"כ</Th>
+                  <Th>טיפ לפני הפרשה</Th>
+                  <Th>הפרשה יומית</Th>
+                  <Th>שכר שעתי</Th>
+                  <Th>סכום סופי לתשלום</Th>
                 </tr>
-              ))}
-            </tbody>
-            <TFoot>
-              <tr>
-                <td colSpan="3" style={{ textAlign: 'right', padding: '1rem' }}>יתרה שלא חולקה:</td>
-                <td style={{ padding: '1rem' }}>{leftover.toFixed(2)} ₪</td>
-              </tr>
-            </TFoot>
-          </Table>
-          
-          {leftover > 0 && (
-            <p style={{ marginTop: '1rem', color: '#666' }}>
-              * היתרה תועבר לטיפים של יום המחרת
-            </p>
-          )}
-          
-          <div style={{ marginTop: '2rem', textAlign: 'center' }}>
-            <Button onClick={saveShift} disabled={loading}>
-              <FaSave />
-              {loading ? 'שומר...' : 'שמור משמרת'}
-            </Button>
-          </div>
-        </Card>
+              </thead>
+              <tbody>
+                {results.map((result, index) => (
+                  <tr key={index}>
+                    <Td>{result.name}</Td>
+                    <Td>{formatNumber(result.hours)}</Td>
+                    <Td>{(result.ratio * 100).toFixed(1)}%</Td>
+                    <Td style={{ color: '#2563eb', fontWeight: '600' }}>₪{formatNumber(result.tipAmount)}</Td>
+                    <Td style={{ color: '#dc2626', fontWeight: '600' }}>-₪{formatNumber(result.dailyDeduction)}</Td>
+                    <Td style={{ color: '#059669', fontWeight: '600' }}>₪{formatNumber(result.hourlyRate)}</Td>
+                    <Td style={{ color: '#7c3aed', fontWeight: '700', fontSize: '1.1em' }}>₪{formatNumber(result.finalTipAmount)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+              <TFoot>
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'right', padding: '1rem' }}>יתרה שלא חולקה:</td>
+                  <td style={{ padding: '1rem' }}>{formatNumber(leftover)} ₪</td>
+                </tr>
+              </TFoot>
+            </Table>
+            
+            {leftover > 0 && (
+              <p style={{ marginTop: '1rem', color: '#666' }}>
+                * היתרה תועבר לטיפים של יום המחרת
+              </p>
+            )}
+            
+            <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+              <Button onClick={saveShift} disabled={loading}>
+                <FaSave />
+                {loading ? 'שומר...' : 'שמור משמרת'}
+              </Button>
+            </div>
+          </Card>
+        </PrintStyles>
       )}
     </CalculatorContainer>
   );

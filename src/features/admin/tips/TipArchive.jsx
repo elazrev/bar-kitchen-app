@@ -198,6 +198,11 @@ const SmallButton = styled.button`
   }
 `;
 
+// פונקציה להצגת מספרים עם שתי ספרות אחרי הנקודה
+function formatNumber(num) {
+  return Number(num || 0).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 const TipArchive = () => {
   const [reportType, setReportType] = useState('daily');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -243,6 +248,26 @@ const TipArchive = () => {
           dayEnd.setHours(23, 59, 59, 999);
           
           data = await tipShiftAPI.getShiftsByDateRange(dayStart, dayEnd);
+          
+          // בדיקת בטיחות למבנה הנתונים
+          if (data && Array.isArray(data)) {
+            data = data.map(shift => ({
+              ...shift,
+              employees: Array.isArray(shift.employees) ? shift.employees.map(emp => ({
+                ...emp,
+                hours: parseFloat(emp.hours) || 0,
+                tipAmount: parseFloat(emp.tipAmount) || 0,
+                dailyDeduction: parseFloat(emp.dailyDeduction) || 0,
+                finalTipAmount: parseFloat(emp.finalTipAmount) || 0,
+                hourlyRate: parseFloat(emp.hourlyRate) || 0
+              })) : [],
+              totalTips: parseFloat(shift.totalTips) || 0,
+              leftover: parseFloat(shift.leftover) || 0
+            }));
+          } else {
+            data = [];
+          }
+          
           setReportData({ type: 'daily', data });
           
           // אם יש כבר דוח ליום זה, נשמור את המזהה שלו
@@ -263,20 +288,54 @@ const TipArchive = () => {
             new Date(endDate)
           );
           
+          // בדיקת בטיחות למבנה הנתונים
+          if (data && Array.isArray(data)) {
+            data = data.map(shift => ({
+              ...shift,
+              employees: Array.isArray(shift.employees) ? shift.employees.map(emp => ({
+                ...emp,
+                hours: parseFloat(emp.hours) || 0,
+                tipAmount: parseFloat(emp.tipAmount) || 0,
+                dailyDeduction: parseFloat(emp.dailyDeduction) || 0,
+                finalTipAmount: parseFloat(emp.finalTipAmount) || 0,
+                hourlyRate: parseFloat(emp.hourlyRate) || 0
+              })) : []
+            }));
+          } else {
+            data = [];
+          }
+          
           const employeeName = employees.find(e => e.id === selectedEmployee)?.name;
           setReportData({ type: 'employee', data, employeeName });
           break;
           
         case 'monthly':
           data = await tipShiftAPI.getMonthlyReport(selectedYear, selectedMonth);
+          
+          // בדיקת בטיחות למבנה הנתונים
+          if (data && data.employeeSummary && Array.isArray(data.employeeSummary)) {
+            data.employeeSummary = data.employeeSummary.map(emp => ({
+              ...emp,
+              totalHours: parseFloat(emp.totalHours) || 0,
+              totalTips: parseFloat(emp.totalTips) || 0,
+              totalDeductions: parseFloat(emp.totalDeductions) || 0,
+              finalTips: parseFloat(emp.finalTips) || 0
+            }));
+            data.totalTips = parseFloat(data.totalTips) || 0;
+            data.totalDeductions = parseFloat(data.totalDeductions) || 0;
+            data.totalFinalTips = parseFloat(data.totalFinalTips) || 0;
+            data.leftoverTotal = parseFloat(data.leftoverTotal) || 0;
+          }
+          
           setReportData({ type: 'monthly', data });
           break;
       }
       
       toast.success('הדוח נוצר בהצלחה');
     } catch (err) {
+      console.error('Error generating report:', err);
       toast.error('שגיאה ביצירת הדוח');
-      console.error(err);
+      setReportData(null);
     } finally {
       setLoading(false);
     }
@@ -288,6 +347,11 @@ const TipArchive = () => {
       setEditedEmployees(shift.employees.map(emp => ({
         ...emp,
         hours: emp.hours.toString(),
+        tipAmount: emp.tipAmount || 0,
+        hourlyDeduction: emp.hourlyDeduction || 20,
+        dailyDeduction: emp.dailyDeduction || (emp.hours * 20),
+        finalTipAmount: emp.finalTipAmount || emp.tipAmount,
+        hourlyRate: emp.hourlyRate || 0
       })));
       setTotalTips(shift.totalTips.toString());
       setIsEditMode(true);
@@ -302,6 +366,10 @@ const TipArchive = () => {
         name: '',
         hours: '',
         tipAmount: 0,
+        hourlyDeduction: 20,
+        dailyDeduction: 0,
+        finalTipAmount: 0,
+        hourlyRate: 0
       }
     ]);
   };
@@ -315,7 +383,8 @@ const TipArchive = () => {
         newEmployees[index] = {
           ...newEmployees[index],
           employeeId: value,
-          name: selectedEmp.name
+          name: selectedEmp.name,
+          hourlyDeduction: selectedEmp.hourlyDeduction || 20
         };
       }
     } else {
@@ -347,10 +416,21 @@ const TipArchive = () => {
       const ratio = hours / totalHours;
       const tipAmount = Math.floor(parsedTotalTips * ratio);
       
+      // חישוב הפרשות ושכר שעתי
+      const employee = employees.find(e => e.id === emp.employeeId);
+      const hourlyDeduction = employee?.hourlyDeduction || 20;
+      const dailyDeduction = hours * hourlyDeduction;
+      const finalTipAmount = Math.max(0, tipAmount - dailyDeduction);
+      const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
+      
       return {
         ...emp,
         tipAmount,
-        ratio
+        ratio,
+        hourlyDeduction,
+        dailyDeduction,
+        finalTipAmount,
+        hourlyRate
       };
     });
 
@@ -372,6 +452,11 @@ const TipArchive = () => {
         employees: editedEmployees.map(emp => ({
           ...emp,
           hours: parseFloat(emp.hours),
+          tipAmount: emp.tipAmount,
+          hourlyDeduction: emp.hourlyDeduction,
+          dailyDeduction: emp.dailyDeduction,
+          finalTipAmount: emp.finalTipAmount,
+          hourlyRate: emp.hourlyRate
         })),
         leftover,
         createdBy: existingShift?.createdBy || 'admin', // צריך להחליף עם המשתמש הנוכחי
@@ -437,30 +522,44 @@ const TipArchive = () => {
               <th>שם עובד</th>
               <th>מס' משמרות</th>
               <th>סה"כ שעות</th>
-              <th>סה"כ טיפים</th>
-              <th>טיפ ממוצע לשעה</th>
+              <th>סה"כ טיפים לפני הפרשה</th>
+              <th>סה"כ הפרשות</th>
+              <th>סה"כ טיפים סופי</th>
+              <th>שכר שעתי ממוצע</th>
             </tr>
           </thead>
           <tbody>
-            ${reportData.data.employeeSummary.map(emp => `
-              <tr>
-                <td>${emp.name}</td>
-                <td>${emp.shiftsCount}</td>
-                <td>${emp.totalHours}</td>
-                <td>₪${emp.totalTips}</td>
-                <td>₪${(emp.totalTips / emp.totalHours).toFixed(2)}</td>
-              </tr>
-            `).join('')}
+            ${reportData.data.employeeSummary.map(emp => {
+              const totalDeductions = emp.totalDeductions || (emp.totalHours * 20);
+              const finalTips = emp.finalTips || Math.max(0, emp.totalTips - totalDeductions);
+              const avgHourlyRate = emp.totalHours > 0 ? (finalTips / emp.totalHours).toFixed(2) : '0.00';
+              
+              return `
+                <tr>
+                  <td>${emp.name}</td>
+                  <td>${emp.shiftsCount}</td>
+                  <td>${formatNumber(emp.totalHours)}</td>
+                  <td style={{ color: '#2563eb', fontWeight: '600' }}>₪${formatNumber(emp.totalTips)}</td>
+                  <td>-₪${formatNumber(totalDeductions)}</td>
+                  <td>₪${formatNumber(finalTips)}</td>
+                  <td>₪${avgHourlyRate}</td>
+                </tr>
+              `;
+            }).join('')}
           </tbody>
           <tfoot>
             <tr>
               <td colspan="3">סה"כ טיפים:</td>
-              <td>₪${reportData.data.totalTips}</td>
+              <td style={{ fontWeight: '600' }}>₪${formatNumber(reportData.data.totalTips)}</td>
+              <td style={{ fontWeight: '600' }}>-₪${formatNumber(reportData.data.totalDeductions)}</td>
+              <td style={{ fontWeight: '600' }}>₪${formatNumber(reportData.data.totalFinalTips)}</td>
               <td></td>
             </tr>
             <tr>
               <td colspan="3">יתרה שלא חולקה:</td>
-              <td>₪${reportData.data.leftoverTotal}</td>
+              <td>₪${formatNumber(reportData.data.leftoverTotal)}</td>
+              <td></td>
+              <td></td>
               <td></td>
             </tr>
           </tfoot>
@@ -470,10 +569,10 @@ const TipArchive = () => {
       const tableHeader = `
         <tr>
           <th>תאריך</th>
-          ${reportData.type === 'daily' ? '<th>שם</th>' : ''}
+          <th>שם</th>
           <th>שעות</th>
-          <th>טיפים</th>
-          <th>טיפ לשעה</th>
+          <th>סכום סופי לתשלום</th>
+          <th>שכר שעתי ממוצע</th>
         </tr>
       `;
       
@@ -483,24 +582,30 @@ const TipArchive = () => {
         if (reportData.type === 'employee') {
           const employeeData = shift.employees.find(e => e.employeeId === selectedEmployee);
           if (employeeData) {
+            const finalAmount = employeeData.finalTipAmount || employeeData.tipAmount;
+            const hourlyRate = employeeData.hourlyRate || (finalAmount / employeeData.hours).toFixed(2);
             tableRows += `
               <tr>
                 <td>${formatDate(shift.date)}</td>
-                <td>${employeeData.hours}</td>
-                <td>₪${employeeData.tipAmount}</td>
-                <td>₪${(employeeData.tipAmount / employeeData.hours).toFixed(2)}</td>
+                <td>${employeeData.name}</td>
+                <td>${formatNumber(employeeData.hours)}</td>
+                <td style={{ color: '#7c3aed', fontWeight: '700' }}>₪${formatNumber(finalAmount)}</td>
+                <td style={{ color: '#059669', fontWeight: '600' }}>₪${formatNumber(hourlyRate)}</td>
               </tr>
             `;
           }
         } else {
           shift.employees.forEach(emp => {
+            const finalAmount = emp.finalTipAmount || emp.tipAmount;
+            const dailyDeduction = emp.dailyDeduction || (emp.hours * 20);
+            const hourlyRate = emp.hourlyRate || (finalAmount / emp.hours).toFixed(2);
             tableRows += `
               <tr>
                 <td>${formatDate(shift.date)}</td>
                 <td>${emp.name}</td>
-                <td>${emp.hours}</td>
-                <td>₪${emp.tipAmount}</td>
-                <td>₪${(emp.tipAmount / emp.hours).toFixed(2)}</td>
+                <td>${formatNumber(emp.hours)}</td>
+                <td style={{ color: '#7c3aed', fontWeight: '700' }}>₪${formatNumber(finalAmount)}</td>
+                <td style={{ color: '#059669', fontWeight: '600' }}>₪${formatNumber(hourlyRate)}</td>
               </tr>
             `;
           });
@@ -515,20 +620,21 @@ const TipArchive = () => {
           return sum + (emp ? parseFloat(emp.hours) : 0);
         }, 0);
         
-        const totalTips = reportData.data.reduce((sum, shift) => {
+        const totalFinalTips = reportData.data.reduce((sum, shift) => {
           const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-          return sum + (emp ? emp.tipAmount : 0);
+          const finalAmount = emp ? (emp.finalTipAmount || emp.tipAmount) : 0;
+          return sum + finalAmount;
         }, 0);
         
-        const avgTipPerHour = totalHours > 0 ? (totalTips / totalHours).toFixed(2) : '0.00';
+        const avgTipPerHour = totalHours > 0 ? (totalFinalTips / totalHours).toFixed(2) : '0.00';
         
         tableFooter = `
           <tfoot>
             <tr>
               <td>סה"כ</td>
-              <td>${totalHours.toFixed(1)}</td>
-              <td>₪${totalTips}</td>
-              <td>₪${avgTipPerHour}</td>
+              <td>${formatNumber(totalHours)}</td>
+              <td>₪${formatNumber(totalFinalTips)}</td>
+              <td>₪${formatNumber(avgTipPerHour)}</td>
             </tr>
           </tfoot>
         `;
@@ -540,7 +646,7 @@ const TipArchive = () => {
             ${tableHeader}
           </thead>
           <tbody>
-            ${tableRows || '<tr><td colspan="5" style="text-align: center; padding: 20px;">אין נתונים לתצוגה</td></tr>'}
+            ${tableRows || '<tr><td colspan="7" style="text-align: center; padding: 20px;">אין נתונים לתצוגה</td></tr>'}
           </tbody>
           ${tableFooter}
         </table>
@@ -785,7 +891,7 @@ const TipArchive = () => {
         </Button>
       </Card>
       
-      {reportData && (
+      {reportData && reportData.data && (
         <Card>
           <ReportHeader>
             <ReportTitle>{getReportTitle()}</ReportTitle>
@@ -846,11 +952,30 @@ const TipArchive = () => {
                   </FormGroup>
                   
                   <FormGroup>
-                    <Label>טיפים</Label>
+                    <Label>טיפים לפני הפרשה</Label>
                     <Input
                       type="number"
                       value={emp.tipAmount}
                       readOnly
+                    />
+                  </FormGroup>
+                  
+                  <FormGroup>
+                    <Label>הפרשה יומית</Label>
+                    <Input
+                      type="number"
+                      value={emp.dailyDeduction || (parseFloat(emp.hours) * 20)}
+                      readOnly
+                    />
+                  </FormGroup>
+                  
+                  <FormGroup>
+                    <Label>סכום סופי לתשלום</Label>
+                    <Input
+                      type="number"
+                      value={emp.finalTipAmount || emp.tipAmount}
+                      readOnly
+                      style={{ color: '#7c3aed', fontWeight: '700' }}
                     />
                   </FormGroup>
                   
@@ -878,117 +1003,169 @@ const TipArchive = () => {
             </EditModeContainer>
           ) : (
             <>
-              {reportData.type === 'monthly' && reportData.data.employeeSummary && (
+              {reportData.type === 'monthly' && reportData.data && reportData.data.employeeSummary && Array.isArray(reportData.data.employeeSummary) && (
                 <Table>
                   <thead>
                     <tr>
                       <Th>שם עובד</Th>
                       <Th>מס' משמרות</Th>
                       <Th>סה"כ שעות</Th>
-                      <Th>סה"כ טיפים</Th>
-                      <Th>טיפ ממוצע לשעה</Th>
+                      <Th>סה"כ טיפים לפני הפרשה</Th>
+                      <Th>סה"כ הפרשות</Th>
+                      <Th>סה"כ טיפים סופי</Th>
+                      <Th>שכר שעתי ממוצע</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.data.employeeSummary.map((emp, index) => (
-                      <tr key={index}>
-                        <Td>{emp.name}</Td>
-                        <Td>{emp.shiftsCount}</Td>
-                        <Td>{emp.totalHours}</Td>
-                        <Td>₪{emp.totalTips}</Td>
-                        <Td>₪{(emp.totalTips / emp.totalHours).toFixed(2)}</Td>
-                      </tr>
-                    ))}
+                    {(reportData.data.employeeSummary || []).map((emp, index) => {
+                      const totalDeductions = emp.totalDeductions || (emp.totalHours * 20);
+                      const finalTips = emp.finalTips || Math.max(0, emp.totalTips - totalDeductions);
+                      const avgHourlyRate = emp.totalHours > 0 ? (finalTips / emp.totalHours).toFixed(2) : '0.00';
+                      
+                      return (
+                        <tr key={index}>
+                          <Td>{emp.name}</Td>
+                          <Td>{emp.shiftsCount}</Td>
+                          <Td>{formatNumber(emp.totalHours)}</Td>
+                          <Td style={{ color: '#2563eb', fontWeight: '600' }}>₪{formatNumber(emp.totalTips)}</Td>
+                          <Td style={{ color: '#dc2626', fontWeight: '600' }}>-₪{formatNumber(totalDeductions)}</Td>
+                          <Td style={{ color: '#7c3aed', fontWeight: '700' }}>₪{formatNumber(finalTips)}</Td>
+                          <Td style={{ color: '#059669', fontWeight: '600' }}>₪{formatNumber(avgHourlyRate)}</Td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <TFoot>
                     <tr>
                       <td colSpan="3">סה"כ טיפים:</td>
-                      <td>₪{reportData.data.totalTips}</td>
+                      <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data.totalTips)}</td>
+                      <td style={{ fontWeight: '600' }}>-₪{formatNumber(reportData.data.totalDeductions)}</td>
+                      <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data.totalFinalTips)}</td>
                       <td></td>
                     </tr>
                     <tr>
                       <td colSpan="3">יתרה שלא חולקה:</td>
-                      <td>₪{reportData.data.leftoverTotal}</td>
+                      <td>₪{formatNumber(reportData.data.leftoverTotal)}</td>
+                      <td></td>
+                      <td></td>
                       <td></td>
                     </tr>
                   </TFoot>
                 </Table>
               )}
               
-              {(reportData.type === 'daily' || reportData.type === 'employee') && reportData.data && (
+              {(reportData.type === 'daily' || reportData.type === 'employee') && reportData.data && Array.isArray(reportData.data) && (
                 <Table>
                   <thead>
                     <tr>
                       <Th>תאריך</Th>
-                      {reportData.type === 'daily' && <Th>שם</Th>}
+                      <Th>שם</Th>
                       <Th>שעות</Th>
-                      <Th>טיפים</Th>
-                      <Th>טיפ לשעה</Th>
+                      <Th>סכום סופי לתשלום</Th>
+                      <Th>שכר שעתי ממוצע</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.data.length === 0 ? (
+                    {!reportData.data || reportData.data.length === 0 ? (
                       <tr>
-                        <td colSpan={reportData.type === 'daily' ? 5 : 4} style={{ textAlign: 'center', padding: '2rem' }}>
+                        <td colSpan={reportData.type === 'daily' ? 7 : 4} style={{ textAlign: 'center', padding: '2rem' }}>
                           אין נתונים לתצוגה
                         </td>
                       </tr>
                     ) : (
-                      reportData.data.map((shift, shiftIndex) => {
+                      (reportData.data || []).map((shift, shiftIndex) => {
                         if (reportData.type === 'employee') {
-                          const employeeData = shift.employees.find(e => e.employeeId === selectedEmployee);
+                          const employeeData = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
                           if (employeeData) {
+                            const finalAmount = employeeData.finalTipAmount || employeeData.tipAmount;
+                            const hourlyRate = employeeData.hourlyRate || (finalAmount / employeeData.hours).toFixed(2);
                             return (
                               <tr key={shiftIndex}>
                                 <Td>{formatDate(shift.date)}</Td>
-                                <Td>{employeeData.hours}</Td>
-                                <Td>₪{employeeData.tipAmount}</Td>
-                                <Td>₪{(employeeData.tipAmount / employeeData.hours).toFixed(2)}</Td>
+                                <Td>{employeeData.name}</Td>
+                                <Td>{formatNumber(employeeData.hours)}</Td>
+                                <Td style={{ color: '#7c3aed', fontWeight: '700' }}>₪{formatNumber(finalAmount)}</Td>
+                                <Td style={{ color: '#059669', fontWeight: '600' }}>₪{formatNumber(hourlyRate)}</Td>
                               </tr>
                             );
                           }
                           return null;
                         } else {
-                          return shift.employees.map((emp, empIndex) => (
-                            <tr key={`${shiftIndex}-${empIndex}`}>
-                              <Td>{formatDate(shift.date)}</Td>
-                              <Td>{emp.name}</Td>
-                              <Td>{emp.hours}</Td>
-                              <Td>₪{emp.tipAmount}</Td>
-                              <Td>₪{(emp.tipAmount / emp.hours).toFixed(2)}</Td>
-                            </tr>
-                          ));
+                          return (shift.employees || []).map((emp, empIndex) => {
+                            const finalAmount = emp.finalTipAmount || emp.tipAmount;
+                            const dailyDeduction = emp.dailyDeduction || (emp.hours * 20);
+                            const hourlyRate = emp.hourlyRate || (finalAmount / emp.hours).toFixed(2);
+                            return (
+                              <tr key={`${shiftIndex}-${empIndex}`}>
+                                <Td>{formatDate(shift.date)}</Td>
+                                <Td>{emp.name}</Td>
+                                <Td>{formatNumber(emp.hours)}</Td>
+                                <Td style={{ color: '#7c3aed', fontWeight: '700' }}>₪{formatNumber(finalAmount)}</Td>
+                                <Td style={{ color: '#059669', fontWeight: '600' }}>₪{formatNumber(hourlyRate)}</Td>
+                              </tr>
+                            );
+                          });
                         }
                       })
                     )}
                   </tbody>
-                  {reportData.type === 'employee' && reportData.data.length > 0 && (
+                  {reportData.type === 'daily' && reportData.data && reportData.data.length > 0 && (
+                    <TFoot>
+                      <tr>
+                        <td colSpan="2">סה"כ טיפים:</td>
+                        <td></td>
+                        <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data[0].totalTips)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan="2">סה"כ הפרשות:</td>
+                        <td></td>
+                        <td style={{ fontWeight: '600', color: '#dc2626' }}>-₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.dailyDeduction || ((emp.hours || 0) * 20)), 0))}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan="2">סה"כ טיפים שחולקו:</td>
+                        <td></td>
+                        <td style={{ fontWeight: '600', color: '#7c3aed' }}>₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.finalTipAmount || emp.tipAmount || 0), 0))}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan="2">יתרה שלא חולקה:</td>
+                        <td></td>
+                        <td style={{ fontWeight: '600' }}>₪{formatNumber(reportData.data[0].leftover)}</td>
+                      </tr>
+                    </TFoot>
+                  )}
+                  {reportData.type === 'employee' && reportData.data && reportData.data.length > 0 && (
                     <TFoot>
                       <tr>
                         <td>סה"כ</td>
                         <td>
-                          {reportData.data.reduce((sum, shift) => {
-                            const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                          {(reportData.data || []).reduce((sum, shift) => {
+                            const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
                             return sum + (emp ? parseFloat(emp.hours) : 0);
                           }, 0).toFixed(1)}
                         </td>
                         <td>
-                          ₪{reportData.data.reduce((sum, shift) => {
-                            const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                            return sum + (emp ? emp.tipAmount : 0);
-                          }, 0)}
+                          ₪{(() => {
+                            const totalFinalTips = (reportData.data || []).reduce((sum, shift) => {
+                              const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
+                              const finalAmount = emp ? (emp.finalTipAmount || emp.tipAmount) : 0;
+                              return sum + finalAmount;
+                            }, 0);
+                            return formatNumber(totalFinalTips);
+                          })()}
                         </td>
                         <td>
                           ₪{(() => {
-                            const totalHours = reportData.data.reduce((sum, shift) => {
-                              const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+                            const totalHours = (reportData.data || []).reduce((sum, shift) => {
+                              const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
                               return sum + (emp ? parseFloat(emp.hours) : 0);
                             }, 0);
-                            const totalTips = reportData.data.reduce((sum, shift) => {
-                              const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
-                              return sum + (emp ? emp.tipAmount : 0);
+                            const totalFinalTips = (reportData.data || []).reduce((sum, shift) => {
+                              const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
+                              const finalAmount = emp ? (emp.finalTipAmount || emp.tipAmount) : 0;
+                              return sum + finalAmount;
                             }, 0);
-                            return (totalTips / totalHours).toFixed(2);
+                            return formatNumber(totalHours > 0 ? (totalFinalTips / totalHours) : 0);
                           })()}
                         </td>
                       </tr>
