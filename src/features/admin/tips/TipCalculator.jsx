@@ -196,7 +196,8 @@ function formatNumber(num) {
 const TipCalculator = () => {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployees, setSelectedEmployees] = useState([]);
-  const [totalTips, setTotalTips] = useState('');
+  const [cashTips, setCashTips] = useState('');
+  const [creditTips, setCreditTips] = useState('');
   const [shiftDate, setShiftDate] = useState(new Date().toISOString().split('T')[0]);
   const [results, setResults] = useState(null);
   const [leftover, setLeftover] = useState(0);
@@ -241,12 +242,28 @@ const TipCalculator = () => {
   };
 
   const calculateTips = async () => {
-    if (!totalTips || selectedEmployees.some(emp => !emp.hours)) {
+    if (!cashTips || !creditTips || selectedEmployees.some(emp => !emp.hours)) {
       toast.error('נא למלא את כל השדות');
       return;
     }
     
-    const parsedTotalTips = parseFloat(totalTips);
+    const parsedCashTips = parseFloat(cashTips);
+    const parsedCreditTips = parseFloat(creditTips);
+    
+    // חישוב סך ההפרשות של כל העובדים
+    const totalDeductions = selectedEmployees.reduce((sum, emp) => {
+      const hours = parseFloat(emp.hours || 0);
+      const employee = employees.find(e => e.id === emp.employeeId);
+      const hourlyDeduction = employee?.hourlyDeduction || 20;
+      return sum + (hours * hourlyDeduction);
+    }, 0);
+    
+    // חישוב כסף מהקופה
+    const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
+    
+    // חישוב סך הטיפים לחלוקה
+    const totalTipsForDistribution = parsedCashTips + cashFromRegister;
+    
     const totalHours = selectedEmployees.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
     
     if (totalHours === 0) {
@@ -257,7 +274,7 @@ const TipCalculator = () => {
     const calculatedResults = selectedEmployees.map(emp => {
       const hours = parseFloat(emp.hours || 0);
       const ratio = hours / totalHours;
-      const exactAmount = parsedTotalTips * ratio;
+      const exactAmount = totalTipsForDistribution * ratio;
       
       // חישוב הפרשות
       const employee = employees.find(e => e.id === emp.employeeId);
@@ -280,10 +297,27 @@ const TipCalculator = () => {
       };
     });
     
-    const distributedAmount = calculatedResults.reduce((sum, result) => sum + result.finalTipAmount, 0);
-    const newLeftover = parsedTotalTips - distributedAmount;
+    // חישוב היתרה - רק השקלים הבודדים שיצאו מהחישוב בגלל העיגול
+    const totalExactAmountAfterDeduction = calculatedResults.reduce((sum, result) => {
+      const hours = parseFloat(result.hours || 0);
+      const ratio = hours / totalHours;
+      const exactAmount = totalTipsForDistribution * ratio;
+      const dailyDeduction = hours * (result.hourlyDeduction || 20);
+      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
+      return sum + exactAmountAfterDeduction;
+    }, 0);
     
-    setResults(calculatedResults);
+    const distributedAmount = calculatedResults.reduce((sum, result) => sum + result.finalTipAmount, 0);
+    const newLeftover = totalExactAmountAfterDeduction - distributedAmount;
+    
+    setResults({
+      calculatedResults,
+      cashTips: parsedCashTips,
+      creditTips: parsedCreditTips,
+      totalDeductions,
+      cashFromRegister,
+      totalTipsForDistribution
+    });
     setLeftover(newLeftover);
   };
   
@@ -323,8 +357,12 @@ const TipCalculator = () => {
       
       const shiftData = {
         date: new Date(shiftDate),
-        totalTips: parseFloat(totalTips),
-        employees: results.map(result => ({
+        cashTips: results.cashTips,
+        creditTips: results.creditTips,
+        totalDeductions: results.totalDeductions,
+        cashFromRegister: results.cashFromRegister,
+        totalTipsForDistribution: results.totalTipsForDistribution,
+        employees: results.calculatedResults.map(result => ({
           ...result,
           // שמירת כל הנתונים החדשים
           hourlyDeduction: result.hourlyDeduction,
@@ -339,14 +377,14 @@ const TipCalculator = () => {
       await tipShiftAPI.saveShift(shiftData);
       
       setSelectedEmployees([]);
-      setTotalTips('');
+      setCashTips('');
+      setCreditTips('');
       setResults(null);
       setLeftover(0);
-      setError(null);
       
       toast.success('המשמרת נשמרה בהצלחה!');
     } catch (err) {
-      setError('שגיאה בשמירת המשמרת');
+      toast.error('שגיאה בשמירת המשמרת');
       console.error(err);
     } finally {
       setLoading(false);
@@ -355,7 +393,8 @@ const TipCalculator = () => {
 
   const resetCalculator = () => {
     setSelectedEmployees([]);
-    setTotalTips('');
+    setCashTips('');
+    setCreditTips('');
     setResults(null);
     setLeftover(0);
   };
@@ -385,14 +424,39 @@ const TipCalculator = () => {
           </FormGroup>
           
           <FormGroup>
-            <Label>סכום טיפים כולל לחלוקה:</Label>
+            <Label>טיפים במזומן:</Label>
             <Input
               type="number"
-              value={totalTips}
-              onChange={(e) => setTotalTips(e.target.value)}
+              value={cashTips}
+              onChange={(e) => setCashTips(e.target.value)}
               placeholder="הכנס סכום..."
               min="0"
               step="1"
+            />
+          </FormGroup>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
+          <FormGroup>
+            <Label>טיפים באשראי:</Label>
+            <Input
+              type="number"
+              value={creditTips}
+              onChange={(e) => setCreditTips(e.target.value)}
+              placeholder="הכנס סכום..."
+              min="0"
+              step="1"
+            />
+          </FormGroup>
+          
+          <FormGroup>
+            <Label>כסף מהקופה (מחושב אוטומטית):</Label>
+            <Input
+              type="number"
+              value={results ? results.cashFromRegister : ''}
+              readOnly
+              style={{ backgroundColor: '#f9f9f9' }}
+              placeholder="יופיע אחרי חישוב..."
             />
           </FormGroup>
         </div>
@@ -461,6 +525,68 @@ const TipCalculator = () => {
         <PrintStyles>
           <Card>
             <h2>תוצאות החישוב</h2>
+            
+            {/* סיכום הטיפים */}
+            <div style={{ 
+              background: '#f8f9fa', 
+              padding: '1rem', 
+              borderRadius: '8px', 
+              marginBottom: '2rem',
+              border: '1px solid #e9ecef'
+            }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#495057' }}>סיכום הטיפים:</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <strong>טיפים במזומן:</strong> ₪{formatNumber(results.cashTips)}
+                </div>
+                <div>
+                  <strong>טיפים באשראי:</strong> ₪{formatNumber(results.creditTips)}
+                </div>
+                <div>
+                  <strong>סך הפרשות עובדים:</strong> ₪{formatNumber(results.totalDeductions)}
+                </div>
+                <div>
+                  <strong>כסף מהקופה:</strong> ₪{formatNumber(results.cashFromRegister)}
+                </div>
+                <div>
+                  <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(results.totalTipsForDistribution)}
+                </div>
+              </div>
+            </div>
+            
+            {/* סיכום חישובי היתרה */}
+            <div style={{ 
+              background: '#f0f8ff', 
+              padding: '1rem', 
+              borderRadius: '8px', 
+              marginBottom: '2rem',
+              border: '1px solid #cce5ff'
+            }}>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#004085' }}>חישוב היתרה:</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+                <div>
+                  <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(results.totalTipsForDistribution)}
+                </div>
+                <div>
+                  <strong>סך טיפים אחרי הפרשות (מדויק):</strong> ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => {
+                    const hours = parseFloat(emp.hours || 0);
+                    const totalHours = results.calculatedResults.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
+                    const ratio = hours / totalHours;
+                    const exactAmount = results.totalTipsForDistribution * ratio;
+                    const dailyDeduction = hours * (emp.hourlyDeduction || 20);
+                    const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
+                    return sum + exactAmountAfterDeduction;
+                  }, 0))}
+                </div>
+                <div>
+                  <strong>סך תשלומים לעובדים (מעוגל):</strong> ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => sum + emp.finalTipAmount, 0))}
+                </div>
+                <div style={{ color: '#dc3545', fontWeight: '600' }}>
+                  <strong>יתרה שלא חולקה (שקלים בודדים):</strong> ₪{formatNumber(leftover)}
+                </div>
+              </div>
+            </div>
+            
             <Table>
               <thead>
                 <tr>
@@ -474,7 +600,7 @@ const TipCalculator = () => {
                 </tr>
               </thead>
               <tbody>
-                {results.map((result, index) => (
+                {results.calculatedResults.map((result, index) => (
                   <tr key={index}>
                     <Td>{result.name}</Td>
                     <Td>{formatNumber(result.hours)}</Td>
@@ -488,8 +614,12 @@ const TipCalculator = () => {
               </tbody>
               <TFoot>
                 <tr>
-                  <td colSpan="3" style={{ textAlign: 'right', padding: '1rem' }}>יתרה שלא חולקה:</td>
-                  <td style={{ padding: '1rem' }}>{formatNumber(leftover)} ₪</td>
+                  <td colSpan="6" style={{ textAlign: 'right', padding: '1rem', fontWeight: '600' }}>
+                    סך תשלומים לעובדים:
+                  </td>
+                  <td style={{ padding: '1rem', fontWeight: '700', color: '#7c3aed' }}>
+                    ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => sum + emp.finalTipAmount, 0))}
+                  </td>
                 </tr>
               </TFoot>
             </Table>

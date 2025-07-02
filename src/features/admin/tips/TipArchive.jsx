@@ -216,7 +216,8 @@ const TipArchive = () => {
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editedEmployees, setEditedEmployees] = useState([]);
-  const [totalTips, setTotalTips] = useState('');
+  const [cashTips, setCashTips] = useState('');
+  const [creditTips, setCreditTips] = useState('');
   const [existingShift, setExistingShift] = useState(null);
 
   useEffect(() => {
@@ -353,7 +354,17 @@ const TipArchive = () => {
         finalTipAmount: emp.finalTipAmount || emp.tipAmount,
         hourlyRate: emp.hourlyRate || 0
       })));
-      setTotalTips(shift.totalTips.toString());
+      
+      // תמיכה במבנה החדש והישן
+      if (shift.cashTips !== undefined && shift.creditTips !== undefined) {
+        setCashTips(shift.cashTips.toString());
+        setCreditTips(shift.creditTips.toString());
+      } else {
+        // תמיכה במבנה הישן
+        setCashTips(shift.totalTips.toString());
+        setCreditTips('0');
+      }
+      
       setIsEditMode(true);
     }
   };
@@ -403,8 +414,24 @@ const TipArchive = () => {
   };
 
   const calculateTipsForEdit = () => {
-    const parsedTotalTips = parseFloat(totalTips);
-    if (isNaN(parsedTotalTips)) return;
+    const parsedCashTips = parseFloat(cashTips);
+    const parsedCreditTips = parseFloat(creditTips);
+    
+    if (isNaN(parsedCashTips) || isNaN(parsedCreditTips)) return;
+
+    // חישוב סך ההפרשות של כל העובדים
+    const totalDeductions = editedEmployees.reduce((sum, emp) => {
+      const hours = parseFloat(emp.hours || 0);
+      const employee = employees.find(e => e.id === emp.employeeId);
+      const hourlyDeduction = employee?.hourlyDeduction || 20;
+      return sum + (hours * hourlyDeduction);
+    }, 0);
+    
+    // חישוב כסף מהקופה
+    const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
+    
+    // חישוב סך הטיפים לחלוקה
+    const totalTipsForDistribution = parsedCashTips + cashFromRegister;
 
     const totalHours = editedEmployees.reduce((sum, emp) => 
       sum + (parseFloat(emp.hours) || 0), 0);
@@ -414,18 +441,21 @@ const TipArchive = () => {
     const updatedEmployees = editedEmployees.map(emp => {
       const hours = parseFloat(emp.hours) || 0;
       const ratio = hours / totalHours;
-      const tipAmount = Math.floor(parsedTotalTips * ratio);
+      const exactAmount = totalTipsForDistribution * ratio;
       
-      // חישוב הפרשות ושכר שעתי
+      // חישוב הפרשות
       const employee = employees.find(e => e.id === emp.employeeId);
       const hourlyDeduction = employee?.hourlyDeduction || 20;
       const dailyDeduction = hours * hourlyDeduction;
-      const finalTipAmount = Math.max(0, tipAmount - dailyDeduction);
+      
+      // החסרת הפרשות מהסכום המדויק ואז עיגול
+      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
+      const finalTipAmount = Math.floor(exactAmountAfterDeduction);
       const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
       
       return {
         ...emp,
-        tipAmount,
+        tipAmount: Math.floor(exactAmount), // סכום לפני הפרשות (לצורך הצגה)
         ratio,
         hourlyDeduction,
         dailyDeduction,
@@ -441,14 +471,44 @@ const TipArchive = () => {
     try {
       setLoading(true);
 
-      // חישוב היתרה
-      const parsedTotalTips = parseFloat(totalTips);
-      const distributedTips = editedEmployees.reduce((sum, emp) => sum + emp.tipAmount, 0);
-      const leftover = parsedTotalTips - distributedTips;
+      const parsedCashTips = parseFloat(cashTips);
+      const parsedCreditTips = parseFloat(creditTips);
+      
+      // חישוב סך ההפרשות של כל העובדים
+      const totalDeductions = editedEmployees.reduce((sum, emp) => {
+        const hours = parseFloat(emp.hours || 0);
+        const employee = employees.find(e => e.id === emp.employeeId);
+        const hourlyDeduction = employee?.hourlyDeduction || 20;
+        return sum + (hours * hourlyDeduction);
+      }, 0);
+      
+      // חישוב כסף מהקופה
+      const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
+      
+      // חישוב סך הטיפים לחלוקה
+      const totalTipsForDistribution = parsedCashTips + cashFromRegister;
+      
+      // חישוב היתרה - רק השקלים הבודדים שיצאו מהחישוב בגלל העיגול
+      const totalExactAmountAfterDeduction = editedEmployees.reduce((sum, emp) => {
+        const hours = parseFloat(emp.hours || 0);
+        const totalHours = editedEmployees.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
+        const ratio = hours / totalHours;
+        const exactAmount = totalTipsForDistribution * ratio;
+        const dailyDeduction = hours * (emp.hourlyDeduction || 20);
+        const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
+        return sum + exactAmountAfterDeduction;
+      }, 0);
+      
+      const distributedTips = editedEmployees.reduce((sum, emp) => sum + emp.finalTipAmount, 0);
+      const leftover = totalExactAmountAfterDeduction - distributedTips;
 
       const shiftData = {
         date: new Date(selectedDate),
-        totalTips: parsedTotalTips,
+        cashTips: parsedCashTips,
+        creditTips: parsedCreditTips,
+        totalDeductions,
+        cashFromRegister,
+        totalTipsForDistribution,
         employees: editedEmployees.map(emp => ({
           ...emp,
           hours: parseFloat(emp.hours),
@@ -911,15 +971,27 @@ const TipArchive = () => {
           
           {isEditMode ? (
             <EditModeContainer>
-              <FormGroup>
-                <Label>סכום טיפים כולל</Label>
-                <Input
-                  type="number"
-                  value={totalTips}
-                  onChange={(e) => setTotalTips(e.target.value)}
-                  onBlur={calculateTipsForEdit}
-                />
-              </FormGroup>
+              <FormRow columns="1fr 1fr">
+                <FormGroup>
+                  <Label>טיפים במזומן</Label>
+                  <Input
+                    type="number"
+                    value={cashTips}
+                    onChange={(e) => setCashTips(e.target.value)}
+                    onBlur={calculateTipsForEdit}
+                  />
+                </FormGroup>
+                
+                <FormGroup>
+                  <Label>טיפים באשראי</Label>
+                  <Input
+                    type="number"
+                    value={creditTips}
+                    onChange={(e) => setCreditTips(e.target.value)}
+                    onBlur={calculateTipsForEdit}
+                  />
+                </FormGroup>
+              </FormRow>
               
               <h3>עובדים במשמרת</h3>
               
