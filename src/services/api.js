@@ -420,14 +420,12 @@ export const saveTaskReport = async (reportData) => {
   
     async getActiveEmployees() {
       try {
-        console.log('Fetching active employees...');
         
         // פתרון: מביאים את כל העובדים ומסננים בצד הלקוח
         const employeesRef = collection(db, 'tip_employees');
         const snapshot = await getDocs(employeesRef);
         
         if (snapshot.empty) {
-          console.log('No employees found in database');
           return [];
         }
         
@@ -453,7 +451,6 @@ export const saveTaskReport = async (reportData) => {
           return nameA.localeCompare(nameB);
         });
         
-        console.log(`Found ${activeEmployees.length} active employees out of ${employees.length} total`);
         return activeEmployees;
       } catch (error) {
         console.error('Error fetching active employees:', error);
@@ -463,13 +460,11 @@ export const saveTaskReport = async (reportData) => {
   
     async getAllEmployees() {
       try {
-        console.log('Fetching all employees...');
         
         const employeesRef = collection(db, 'tip_employees');
         const snapshot = await getDocs(employeesRef);
         
         if (snapshot.empty) {
-          console.log('No employees found in database');
           return [];
         }
         
@@ -489,7 +484,6 @@ export const saveTaskReport = async (reportData) => {
           return nameA.localeCompare(nameB);
         });
         
-        console.log(`Found ${employees.length} total employees`);
         return employees;
       } catch (error) {
         console.error('Error fetching all employees:', error);
@@ -502,17 +496,24 @@ export const saveTaskReport = async (reportData) => {
   export const tipShiftAPI = {
     async saveShift(shiftData) {
       try {
+        
         const shiftRef = await addDoc(collection(db, 'tip_shifts'), {
           date: shiftData.date,
-          totalTips: shiftData.totalTips,
+          cashTips: shiftData.cashTips,
+          creditTips: shiftData.creditTips,
+          totalDeductions: shiftData.totalDeductions,
+          cashFromRegister: shiftData.cashFromRegister,
+          totalTipsForDistribution: shiftData.totalTipsForDistribution,
           employees: shiftData.employees,
           leftover: shiftData.leftover,
           createdBy: shiftData.createdBy,
           createdAt: serverTimestamp()
         });
+        
         return { id: shiftRef.id, ...shiftData };
       } catch (error) {
-        console.error('Error saving shift:', error);
+        console.error('API: Error saving shift:', error.message);
+        console.error('API: Error details:', error);
         throw error;
       }
     },

@@ -444,10 +444,10 @@ const TipArchive = () => {
       return sum + (hours * hourlyDeduction);
     }, 0);
     
-    // חישוב כסף מהקופה
+    // חישוב כסף מהקופה - היתרה של הפחתת ההפרשות היומיות של העובדים מסכום הטיפים באשראי
     const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
     
-    // חישוב סך הטיפים לחלוקה
+    // חישוב סך הטיפים לחלוקה - טיפים במזומן + כסף מהקופה
     const totalTipsForDistribution = parsedCashTips + cashFromRegister;
 
     const totalHours = editedEmployees.reduce((sum, emp) => 
@@ -460,15 +460,14 @@ const TipArchive = () => {
       const ratio = hours / totalHours;
       const exactAmount = totalTipsForDistribution * ratio;
       
-      // חישוב הפרשות
+      // חישוב הפרשות (רק לצורך הצגה)
       const employee = employees.find(e => e.id === emp.employeeId);
       const hourlyDeduction = employee?.hourlyDeduction || 20;
       const dailyDeduction = hours * hourlyDeduction;
       
-      // החסרת הפרשות מהסכום המדויק ואז עיגול
-      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
-      const finalTipAmount = Math.floor(exactAmountAfterDeduction);
-      const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
+      // הסכום הסופי הוא הסכום המדויק (ללא הפחתת הפרשות נוספת)
+      const finalTipAmount = Math.floor(exactAmount);
+      const hourlyRate = hours > 0 ? (exactAmount / hours) : 0;
       
       return {
         ...emp,
@@ -499,25 +498,23 @@ const TipArchive = () => {
         return sum + (hours * hourlyDeduction);
       }, 0);
       
-      // חישוב כסף מהקופה
+      // חישוב כסף מהקופה - היתרה של הפחתת ההפרשות היומיות של העובדים מסכום הטיפים באשראי
       const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
       
-      // חישוב סך הטיפים לחלוקה
+      // חישוב סך הטיפים לחלוקה - טיפים במזומן + כסף מהקופה
       const totalTipsForDistribution = parsedCashTips + cashFromRegister;
       
       // חישוב היתרה - רק השקלים הבודדים שיצאו מהחישוב בגלל העיגול
-      const totalExactAmountAfterDeduction = editedEmployees.reduce((sum, emp) => {
+      const totalExactAmount = editedEmployees.reduce((sum, emp) => {
         const hours = parseFloat(emp.hours || 0);
         const totalHours = editedEmployees.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
         const ratio = hours / totalHours;
         const exactAmount = totalTipsForDistribution * ratio;
-        const dailyDeduction = hours * (emp.hourlyDeduction || 20);
-        const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
-        return sum + exactAmountAfterDeduction;
+        return sum + exactAmount;
       }, 0);
       
       const distributedTips = editedEmployees.reduce((sum, emp) => sum + emp.finalTipAmount, 0);
-      const leftover = totalExactAmountAfterDeduction - distributedTips;
+      const leftover = totalExactAmount - distributedTips;
 
       const shiftData = {
         date: new Date(selectedDate),
@@ -609,7 +606,7 @@ const TipArchive = () => {
             ${reportData.data.employeeSummary.map(emp => {
               const totalDeductions = emp.totalDeductions || (emp.totalHours * 20);
               const finalTips = emp.finalTips || Math.max(0, emp.totalTips - totalDeductions);
-              const avgHourlyRate = emp.totalHours > 0 ? (finalTips / emp.totalHours).toFixed(2) : '0.00';
+              const avgHourlyRate = emp.totalHours > 0 ? (emp.totalTips / emp.totalHours).toFixed(2) : '0.00';
               
               return `
                 <tr>
@@ -660,7 +657,8 @@ const TipArchive = () => {
           const employeeData = shift.employees.find(e => e.employeeId === selectedEmployee);
           if (employeeData) {
             const finalAmount = employeeData.finalTipAmount || employeeData.tipAmount;
-            const hourlyRate = employeeData.hourlyRate || (finalAmount / employeeData.hours).toFixed(2);
+            const tipAmount = employeeData.tipAmount || 0;
+            const hourlyRate = employeeData.hourlyRate || (tipAmount / employeeData.hours).toFixed(2);
             tableRows += `
               <tr>
                 <td>${formatDate(shift.date)}</td>
@@ -675,7 +673,8 @@ const TipArchive = () => {
           shift.employees.forEach(emp => {
             const finalAmount = emp.finalTipAmount || emp.tipAmount;
             const dailyDeduction = emp.dailyDeduction || (emp.hours * 20);
-            const hourlyRate = emp.hourlyRate || (finalAmount / emp.hours).toFixed(2);
+            const tipAmount = emp.tipAmount || 0;
+            const hourlyRate = emp.hourlyRate || (tipAmount / emp.hours).toFixed(2);
             tableRows += `
               <tr>
                 <td>${formatDate(shift.date)}</td>
@@ -703,7 +702,13 @@ const TipArchive = () => {
           return sum + finalAmount;
         }, 0);
         
-        const avgTipPerHour = totalHours > 0 ? (totalFinalTips / totalHours).toFixed(2) : '0.00';
+        const totalTips = reportData.data.reduce((sum, shift) => {
+          const emp = shift.employees.find(e => e.employeeId === selectedEmployee);
+          const tipAmount = emp ? (emp.tipAmount || 0) : 0;
+          return sum + tipAmount;
+        }, 0);
+        
+        const avgTipPerHour = totalHours > 0 ? (totalTips / totalHours).toFixed(2) : '0.00';
         
         tableFooter = `
           <tfoot>
@@ -1109,7 +1114,7 @@ const TipArchive = () => {
                     {(reportData.data.employeeSummary || []).map((emp, index) => {
                       const totalDeductions = emp.totalDeductions || (emp.totalHours * 20);
                       const finalTips = emp.finalTips || Math.max(0, emp.totalTips - totalDeductions);
-                      const avgHourlyRate = emp.totalHours > 0 ? (finalTips / emp.totalHours).toFixed(2) : '0.00';
+                      const avgHourlyRate = emp.totalHours > 0 ? (emp.totalTips / emp.totalHours).toFixed(2) : '0.00';
                       
                       return (
                         <tr key={index}>
@@ -1170,12 +1175,12 @@ const TipArchive = () => {
                               <strong>טיפים באשראי:</strong> ₪{formatNumber(reportData.data[0].creditTips)}
                             </div>
                             <div>
-                              <strong>סך הפרשות עובדים:</strong> ₪{formatNumber(reportData.data[0].totalDeductions || 0)}
+                              <strong>הפרשה יומית כללית:</strong> ₪{formatNumber(reportData.data[0].totalDeductions || 0)}
                             </div>
-                            <div>
-                              <strong>כסף מהקופה:</strong> ₪{formatNumber(reportData.data[0].cashFromRegister || 0)}
+                            <div style={{ color: '#dc2626', fontWeight: '600' }}>
+                              <strong>כסף למשוך מהקופה:</strong> ₪{formatNumber(reportData.data[0].cashFromRegister || 0)}
                             </div>
-                            <div>
+                            <div style={{ color: '#059669', fontWeight: '600' }}>
                               <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(reportData.data[0].totalTipsForDistribution || 0)}
                             </div>
                           </>
@@ -1187,7 +1192,7 @@ const TipArchive = () => {
                         )}
                       </div>
                       
-                      {/* חישוב היתרה */}
+                      {/* סיכום תשלומים לעובדים */}
                       <div style={{ 
                         background: '#f0f8ff', 
                         padding: '1rem', 
@@ -1195,21 +1200,30 @@ const TipArchive = () => {
                         marginTop: '1rem',
                         border: '1px solid #cce5ff'
                       }}>
-                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#004085' }}>חישוב היתרה:</h4>
+                        <h4 style={{ margin: '0 0 0.5rem 0', color: '#004085' }}>סיכום תשלומים לעובדים:</h4>
                         <div style={{ 
                           display: 'grid', 
                           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
                           gap: '1rem' 
                         }}>
                           <div>
-                            <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(reportData.data[0].totalTipsForDistribution || reportData.data[0].totalTips)}
+                            <strong>סך שעות עבודה:</strong> {(reportData.data[0].employees || []).reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0).toFixed(1)} שעות
                           </div>
                           <div>
                             <strong>סך תשלומים לעובדים:</strong> ₪{formatNumber((reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.finalTipAmount || emp.tipAmount || 0), 0))}
                           </div>
-                          <div style={{ color: '#dc3545', fontWeight: '600' }}>
-                            <strong>יתרה שלא חולקה (שקלים בודדים):</strong> ₪{formatNumber(reportData.data[0].leftover)}
+                          <div>
+                            <strong>ממוצע שכר שעתי:</strong> ₪{formatNumber((() => {
+                              const totalHours = (reportData.data[0].employees || []).reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
+                              const totalTipsBeforeDeductions = (reportData.data[0].employees || []).reduce((sum, emp) => sum + (emp.tipAmount || 0), 0);
+                              return totalHours > 0 ? (totalTipsBeforeDeductions / totalHours) : 0;
+                            })())}
                           </div>
+                          {reportData.data[0].leftover > 0 && (
+                            <div style={{ color: '#dc3545', fontWeight: '600' }}>
+                              <strong>יתרה לטיפים מחר:</strong> ₪{formatNumber(reportData.data[0].leftover)}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1238,7 +1252,8 @@ const TipArchive = () => {
                           const employeeData = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
                           if (employeeData) {
                             const finalAmount = employeeData.finalTipAmount || employeeData.tipAmount;
-                            const hourlyRate = employeeData.hourlyRate || (finalAmount / employeeData.hours).toFixed(2);
+                            const tipAmount = employeeData.tipAmount || 0;
+                            const hourlyRate = employeeData.hourlyRate || (tipAmount / employeeData.hours).toFixed(2);
                             return (
                               <tr key={shiftIndex}>
                                 <Td>{formatDate(shift.date)}</Td>
@@ -1254,7 +1269,8 @@ const TipArchive = () => {
                           return (shift.employees || []).map((emp, empIndex) => {
                             const finalAmount = emp.finalTipAmount || emp.tipAmount;
                             const dailyDeduction = emp.dailyDeduction || (emp.hours * 20);
-                            const hourlyRate = emp.hourlyRate || (finalAmount / emp.hours).toFixed(2);
+                            const tipAmount = emp.tipAmount || 0;
+                            const hourlyRate = emp.hourlyRate || (tipAmount / emp.hours).toFixed(2);
                             return (
                               <tr key={`${shiftIndex}-${empIndex}`}>
                                 <Td>{formatDate(shift.date)}</Td>
@@ -1296,12 +1312,12 @@ const TipArchive = () => {
                               const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
                               return sum + (emp ? parseFloat(emp.hours) : 0);
                             }, 0);
-                            const totalFinalTips = (reportData.data || []).reduce((sum, shift) => {
+                            const totalTips = (reportData.data || []).reduce((sum, shift) => {
                               const emp = (shift.employees || []).find(e => e.employeeId === selectedEmployee);
-                              const finalAmount = emp ? (emp.finalTipAmount || emp.tipAmount) : 0;
-                              return sum + finalAmount;
+                              const tipAmount = emp ? (emp.tipAmount || 0) : 0;
+                              return sum + tipAmount;
                             }, 0);
-                            return formatNumber(totalHours > 0 ? (totalFinalTips / totalHours) : 0);
+                            return formatNumber(totalHours > 0 ? (totalTips / totalHours) : 0);
                           })()}
                         </td>
                       </tr>

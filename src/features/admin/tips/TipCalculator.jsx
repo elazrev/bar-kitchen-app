@@ -280,7 +280,7 @@ const TipCalculator = () => {
     const parsedCashTips = parseFloat(cashTips);
     const parsedCreditTips = parseFloat(creditTips);
     
-    // חישוב סך ההפרשות של כל העובדים
+    // חישוב סך ההפרשות היומיות של כל העובדים
     const totalDeductions = selectedEmployees.reduce((sum, emp) => {
       const hours = parseFloat(emp.hours || 0);
       const employee = employees.find(e => e.id === emp.employeeId);
@@ -288,10 +288,10 @@ const TipCalculator = () => {
       return sum + (hours * hourlyDeduction);
     }, 0);
     
-    // חישוב כסף מהקופה
+    // חישוב כסף מהקופה - כמה כסף צריך למשוך מהקופה
     const cashFromRegister = Math.max(0, parsedCreditTips - totalDeductions);
     
-    // חישוב סך הטיפים לחלוקה
+    // חישוב סך הטיפים לחלוקה - טיפים במזומן + כסף מהקופה
     const totalTipsForDistribution = parsedCashTips + cashFromRegister;
     
     const totalHours = selectedEmployees.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
@@ -306,15 +306,14 @@ const TipCalculator = () => {
       const ratio = hours / totalHours;
       const exactAmount = totalTipsForDistribution * ratio;
       
-      // חישוב הפרשות
+      // חישוב הפרשות (רק לצורך הצגה)
       const employee = employees.find(e => e.id === emp.employeeId);
       const hourlyDeduction = employee?.hourlyDeduction || 20;
       const dailyDeduction = hours * hourlyDeduction;
       
-      // החסרת הפרשות מהסכום המדויק ואז עיגול
-      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
-      const finalTipAmount = Math.floor(exactAmountAfterDeduction);
-      const hourlyRate = hours > 0 ? (finalTipAmount / hours) : 0;
+      // הסכום הסופי הוא הסכום המדויק (ללא הפחתת הפרשות נוספת)
+      const finalTipAmount = Math.floor(exactAmount);
+      const hourlyRate = hours > 0 ? (exactAmount / hours) : 0;
       
       return {
         ...emp,
@@ -328,17 +327,15 @@ const TipCalculator = () => {
     });
     
     // חישוב היתרה - רק השקלים הבודדים שיצאו מהחישוב בגלל העיגול
-    const totalExactAmountAfterDeduction = calculatedResults.reduce((sum, result) => {
+    const totalExactAmount = calculatedResults.reduce((sum, result) => {
       const hours = parseFloat(result.hours || 0);
       const ratio = hours / totalHours;
       const exactAmount = totalTipsForDistribution * ratio;
-      const dailyDeduction = hours * (result.hourlyDeduction || 20);
-      const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
-      return sum + exactAmountAfterDeduction;
+      return sum + exactAmount;
     }, 0);
     
     const distributedAmount = calculatedResults.reduce((sum, result) => sum + result.finalTipAmount, 0);
-    const newLeftover = totalExactAmountAfterDeduction - distributedAmount;
+    const newLeftover = totalExactAmount - distributedAmount;
     
     setResults({
       calculatedResults,
@@ -372,6 +369,21 @@ const TipCalculator = () => {
     try {
       setLoading(true);
       
+      if (!user?.uid) {
+        toast.error('שגיאה: המשתמש לא מזוהה');
+        return;
+      }
+      
+      if (!results) {
+        toast.error('שגיאה: אין נתונים לשמירה');
+        return;
+      }
+      
+      if (!shiftDate) {
+        toast.error('שגיאה: נא לבחור תאריך');
+        return;
+      }
+      
       // בדיקה אם קיים כבר דוח לתאריך זה
       const dayStart = new Date(shiftDate);
       dayStart.setHours(0, 0, 0, 0);
@@ -386,25 +398,27 @@ const TipCalculator = () => {
       }
       
       const shiftData = {
-        date: new Date(shiftDate),
-        cashTips: results.cashTips,
-        creditTips: results.creditTips,
-        totalDeductions: results.totalDeductions,
-        cashFromRegister: results.cashFromRegister,
-        totalTipsForDistribution: results.totalTipsForDistribution,
+        date: new Date(shiftDate + 'T00:00:00'),
+        cashTips: parseFloat(results.cashTips) || 0,
+        creditTips: parseFloat(results.creditTips) || 0,
+        totalDeductions: parseFloat(results.totalDeductions) || 0,
+        cashFromRegister: parseFloat(results.cashFromRegister) || 0,
+        totalTipsForDistribution: parseFloat(results.totalTipsForDistribution) || 0,
         employees: results.calculatedResults.map(result => ({
           ...result,
           // שמירת כל הנתונים החדשים
-          hourlyDeduction: result.hourlyDeduction,
-          dailyDeduction: result.dailyDeduction,
-          finalTipAmount: result.finalTipAmount,
-          hourlyRate: result.hourlyRate
+          hours: parseFloat(result.hours) || 0,
+          tipAmount: parseFloat(result.tipAmount) || 0,
+          hourlyDeduction: parseFloat(result.hourlyDeduction) || 0,
+          dailyDeduction: parseFloat(result.dailyDeduction) || 0,
+          finalTipAmount: parseFloat(result.finalTipAmount) || 0,
+          hourlyRate: parseFloat(result.hourlyRate) || 0
         })),
-        leftover: leftover,
+        leftover: parseFloat(leftover) || 0,
         createdBy: user.uid
       };
       
-      await tipShiftAPI.saveShift(shiftData);
+      const savedShift = await tipShiftAPI.saveShift(shiftData);
       
       setSelectedEmployees([]);
       setCashTips('');
@@ -414,8 +428,9 @@ const TipCalculator = () => {
       
       toast.success('המשמרת נשמרה בהצלחה!');
     } catch (err) {
+      console.error('Error in saveShift:', err.message);
+      console.error('Error details:', err);
       toast.error('שגיאה בשמירת המשמרת');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -597,18 +612,18 @@ const TipCalculator = () => {
                   <strong>טיפים באשראי:</strong> ₪{formatNumber(results.creditTips)}
                 </div>
                 <div>
-                  <strong>סך הפרשות עובדים:</strong> ₪{formatNumber(results.totalDeductions)}
+                  <strong>הפרשה יומית כללית:</strong> ₪{formatNumber(results.totalDeductions)}
                 </div>
-                <div>
-                  <strong>כסף מהקופה:</strong> ₪{formatNumber(results.cashFromRegister)}
+                <div style={{ color: '#dc2626', fontWeight: '600' }}>
+                  <strong>כסף למשוך מהקופה:</strong> ₪{formatNumber(results.cashFromRegister)}
                 </div>
-                <div>
+                <div style={{ color: '#059669', fontWeight: '600' }}>
                   <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(results.totalTipsForDistribution)}
                 </div>
               </div>
             </div>
             
-            {/* סיכום חישובי היתרה */}
+            {/* סיכום תשלומים לעובדים */}
             <div style={{ 
               background: '#f0f8ff', 
               padding: '1rem', 
@@ -616,32 +631,30 @@ const TipCalculator = () => {
               marginBottom: '2rem',
               border: '1px solid #cce5ff'
             }}>
-              <h3 style={{ margin: '0 0 1rem 0', color: '#004085' }}>חישוב היתרה:</h3>
+              <h3 style={{ margin: '0 0 1rem 0', color: '#004085' }}>סיכום תשלומים לעובדים:</h3>
               <div style={{ 
                 display: 'grid', 
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
                 gap: '1rem' 
               }}>
                 <div>
-                  <strong>סך טיפים לחלוקה:</strong> ₪{formatNumber(results.totalTipsForDistribution)}
+                  <strong>סך שעות עבודה:</strong> {formatNumber(results.calculatedResults.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0))} שעות
                 </div>
                 <div>
-                  <strong>סך טיפים אחרי הפרשות (מדויק):</strong> ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => {
-                    const hours = parseFloat(emp.hours || 0);
+                  <strong>סך תשלומים לעובדים:</strong> ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => sum + emp.finalTipAmount, 0))}
+                </div>
+                <div>
+                  <strong>ממוצע שכר שעתי:</strong> ₪{formatNumber((() => {
                     const totalHours = results.calculatedResults.reduce((sum, emp) => sum + parseFloat(emp.hours || 0), 0);
-                    const ratio = hours / totalHours;
-                    const exactAmount = results.totalTipsForDistribution * ratio;
-                    const dailyDeduction = hours * (emp.hourlyDeduction || 20);
-                    const exactAmountAfterDeduction = Math.max(0, exactAmount - dailyDeduction);
-                    return sum + exactAmountAfterDeduction;
-                  }, 0))}
+                    const totalTipsBeforeDeductions = results.calculatedResults.reduce((sum, emp) => sum + emp.tipAmount, 0);
+                    return totalHours > 0 ? (totalTipsBeforeDeductions / totalHours) : 0;
+                  })())}
                 </div>
-                <div>
-                  <strong>סך תשלומים לעובדים (מעוגל):</strong> ₪{formatNumber(results.calculatedResults.reduce((sum, emp) => sum + emp.finalTipAmount, 0))}
-                </div>
-                <div style={{ color: '#dc3545', fontWeight: '600' }}>
-                  <strong>יתרה שלא חולקה (שקלים בודדים):</strong> ₪{formatNumber(leftover)}
-                </div>
+                {leftover > 0 && (
+                  <div style={{ color: '#dc3545', fontWeight: '600' }}>
+                    <strong>יתרה לטיפים מחר:</strong> ₪{formatNumber(leftover)}
+                  </div>
+                )}
               </div>
             </div>
             
@@ -650,11 +663,8 @@ const TipCalculator = () => {
                 <tr>
                   <Th>שם העובד</Th>
                   <Th>שעות</Th>
-                  <Th>אחוז מהסה"כ</Th>
-                  <Th>טיפ לפני הפרשה</Th>
-                  <Th>הפרשה יומית</Th>
                   <Th>שכר שעתי</Th>
-                  <Th>סכום סופי לתשלום</Th>
+                  <Th>סכום לתשלום</Th>
                 </tr>
               </thead>
               <tbody>
@@ -662,9 +672,6 @@ const TipCalculator = () => {
                   <tr key={index}>
                     <Td>{result.name}</Td>
                     <Td>{formatNumber(result.hours)}</Td>
-                    <Td>{(result.ratio * 100).toFixed(1)}%</Td>
-                    <Td style={{ color: '#2563eb', fontWeight: '600' }}>₪{formatNumber(result.tipAmount)}</Td>
-                    <Td style={{ color: '#dc2626', fontWeight: '600' }}>-₪{formatNumber(result.dailyDeduction)}</Td>
                     <Td style={{ color: '#059669', fontWeight: '600' }}>₪{formatNumber(result.hourlyRate)}</Td>
                     <Td style={{ color: '#7c3aed', fontWeight: '700', fontSize: '1.1em' }}>₪{formatNumber(result.finalTipAmount)}</Td>
                   </tr>
@@ -672,7 +679,7 @@ const TipCalculator = () => {
               </tbody>
               <TFoot>
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'right', padding: '1rem', fontWeight: '600' }}>
+                  <td colSpan="3" style={{ textAlign: 'right', padding: '1rem', fontWeight: '600' }}>
                     סך תשלומים לעובדים:
                   </td>
                   <td style={{ padding: '1rem', fontWeight: '700', color: '#7c3aed' }}>
@@ -682,11 +689,7 @@ const TipCalculator = () => {
               </TFoot>
             </Table>
             
-            {leftover > 0 && (
-              <p style={{ marginTop: '1rem', color: '#666' }}>
-                * היתרה תועבר לטיפים של יום המחרת
-              </p>
-            )}
+
             
             <div style={{ 
               marginTop: '2rem', 
